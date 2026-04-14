@@ -49,7 +49,13 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
 
   const lastUpdated = useMemo(() => {
     if (!initialProfile?.updated_at) return null;
-    return new Date(initialProfile.updated_at).toLocaleString();
+    return new Date(initialProfile.updated_at).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }, [initialProfile?.updated_at]);
 
   function updateProfile(path: keyof CandidateProfileData, value: CandidateProfileData[keyof CandidateProfileData]) {

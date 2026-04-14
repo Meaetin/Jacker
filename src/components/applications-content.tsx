@@ -45,9 +45,25 @@ export function ApplicationsContent({
   function syncUrl(overrides: Record<string, string>) {
     const url = new URL(window.location.href);
     const merged = { view, status, search, ...overrides };
-    merged.view ? url.searchParams.set("view", merged.view) : url.searchParams.delete("view");
-    merged.status ? url.searchParams.set("status", merged.status) : url.searchParams.delete("status");
-    merged.search ? url.searchParams.set("search", merged.search) : url.searchParams.delete("search");
+
+    if (merged.view) {
+      url.searchParams.set("view", merged.view);
+    } else {
+      url.searchParams.delete("view");
+    }
+
+    if (merged.status) {
+      url.searchParams.set("status", merged.status);
+    } else {
+      url.searchParams.delete("status");
+    }
+
+    if (merged.search) {
+      url.searchParams.set("search", merged.search);
+    } else {
+      url.searchParams.delete("search");
+    }
+
     window.history.replaceState({}, "", url.toString());
   }
 

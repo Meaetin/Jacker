@@ -1,7 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import type { CandidateProfileData, CandidateProfileRecord } from "@/types/profile";
-import { DEFAULT_PROFILE_DATA } from "@/lib/profile/defaults";
-import { candidateProfileDataSchema } from "@/types/schemas";
+import { DEFAULT_PROFILE_DATA, normalizeProfileData } from "@/lib/profile/defaults";
 
 export async function getCandidateProfile(userId: string): Promise<CandidateProfileRecord | null> {
   const supabase = await createClient();
@@ -12,11 +11,9 @@ export async function getCandidateProfile(userId: string): Promise<CandidateProf
     .maybeSingle();
 
   if (error || !data) return null;
-  const normalized = candidateProfileDataSchema.safeParse(data.profile_data);
-
   return {
     ...(data as CandidateProfileRecord),
-    profile_data: normalized.success ? normalized.data : DEFAULT_PROFILE_DATA,
+    profile_data: normalizeProfileData(data.profile_data),
   };
 }
 

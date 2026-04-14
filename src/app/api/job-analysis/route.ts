@@ -4,6 +4,8 @@ import { getCandidateProfile } from "@/lib/db/candidate-profile";
 import { analyzeJobFit } from "@/lib/profile/analyze-job-fit";
 import { getScoreBand } from "@/lib/profile/defaults";
 import { getJobFitAnalyses, insertJobFitAnalysis } from "@/lib/db/job-fit-analyses";
+import { scrapeJobPosting } from "@/lib/profile/scrape-job-posting";
+import { insertUserUsage } from "@/lib/db/user-usage";
 import { jobAnalysisRequestSchema } from "@/types/schemas";
 
 export async function GET() {
@@ -48,23 +50,66 @@ export async function POST(request: Request) {
     );
   }
 
+  const normalizeOptional = (value?: string | null) => {
+    const cleaned = value?.trim();
+    return cleaned ? cleaned : null;
+  };
+
+  let jobDescription = normalizeOptional(parsed.data.job_description);
+  let sourceUrl = normalizeOptional(parsed.data.source_url);
+  let companyName = normalizeOptional(parsed.data.company_name);
+  let jobTitle = normalizeOptional(parsed.data.job_title);
+
+  if (sourceUrl && !jobDescription) {
+    try {
+      const scraped = await scrapeJobPosting(sourceUrl);
+      jobDescription = scraped.jobDescription;
+      sourceUrl = scraped.sourceUrl;
+      companyName = companyName ?? scraped.companyName;
+      jobTitle = jobTitle ?? scraped.jobTitle;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to scrape job URL";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
+  if (!jobDescription || jobDescription.length < 50) {
+    return NextResponse.json(
+      { error: "Job description must be at least 50 characters" },
+      { status: 400 },
+    );
+  }
+
   let result;
   try {
     result = await analyzeJobFit({
       cvMarkdown: profile.cv_markdown,
       profileData: profile.profile_data,
-      jobDescription: parsed.data.job_description,
+      jobDescription,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Analysis failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
+  await insertUserUsage({
+    user_id: user.id,
+    action_type: "job_analysis",
+    input_tokens: result.inputTokens,
+    output_tokens: result.outputTokens,
+  });
+
+  companyName = companyName ?? result.company_name;
+  jobTitle = jobTitle ?? result.job_title;
+
   const band = getScoreBand(result.score);
 
   const { data, error } = await insertJobFitAnalysis({
     user_id: user.id,
-    job_description: parsed.data.job_description,
+    job_description: jobDescription,
+    company_name: companyName,
+    job_title: jobTitle,
+    source_url: sourceUrl,
     score: result.score,
     band,
     strengths_md: result.strengths_md,

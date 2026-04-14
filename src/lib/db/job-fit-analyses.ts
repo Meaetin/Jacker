@@ -4,6 +4,9 @@ import type { FitBand, JobFitAnalysis } from "@/types/profile";
 interface InsertAnalysisInput {
   user_id: string;
   job_description: string;
+  company_name: string | null;
+  job_title: string | null;
+  source_url: string | null;
   score: number;
   band: FitBand;
   strengths_md: string;

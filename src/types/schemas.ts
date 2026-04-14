@@ -118,10 +118,22 @@ export const candidateProfileUpdateSchema = z.object({
 });
 
 export const jobAnalysisRequestSchema = z.object({
-  job_description: z.string().trim().min(50).max(60000),
+  job_description: z.string().trim().min(50).max(60000).optional(),
+  source_url: z.string().trim().url().optional(),
+  company_name: z.string().trim().max(200).optional(),
+  job_title: z.string().trim().max(200).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.job_description && !value.source_url) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Either job_description or source_url is required.",
+    });
+  }
 });
 
 export const jobAnalysisResultSchema = z.object({
+  company_name: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),
+  job_title: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),
   score: z.number().int().min(0).max(100),
   strengths_md: z.string().trim().min(1),
   gaps_md: z.string().trim().min(1),

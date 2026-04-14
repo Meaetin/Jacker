@@ -176,6 +176,7 @@ export async function runIngestPipeline(
   if (emailsScanned > 0) {
     await insertUserUsage({
       user_id: userId,
+      action_type: "email_parse",
       input_tokens: totalInputTokens,
       output_tokens: totalOutputTokens,
       emails_retrieved: result.fetched,

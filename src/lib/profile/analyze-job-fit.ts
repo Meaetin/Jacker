@@ -11,6 +11,8 @@ You will receive:
 
 Return JSON only with this shape:
 {
+  "company_name": "string or null",
+  "job_title": "string or null",
   "score": 0,
   "strengths_md": "markdown bullets",
   "gaps_md": "markdown bullets",
@@ -19,6 +21,8 @@ Return JSON only with this shape:
 }
 
 Rules:
+- company_name: extract the hiring company from the provided job description text only. Return null if unclear.
+- job_title: extract the role title from the provided job description text only. Return null if unclear.
 - score must be an integer 0-100.
 - Be evidence-based using candidate data and the job description.
 - strengths_md and gaps_md should each include at least 3 bullet points when possible.
@@ -54,6 +58,8 @@ export async function analyzeJobFit(input: AnalyzeInput) {
   });
 
   const raw = response.choices[0]?.message?.content ?? "{}";
+  const inputTokens = response.usage?.prompt_tokens ?? 0;
+  const outputTokens = response.usage?.completion_tokens ?? 0;
   const parsed = JSON.parse(raw);
   const validated = jobAnalysisResultSchema.safeParse(parsed);
 
@@ -61,5 +67,9 @@ export async function analyzeJobFit(input: AnalyzeInput) {
     throw new Error("Failed to generate valid job-fit analysis");
   }
 
-  return validated.data;
+  return {
+    ...validated.data,
+    inputTokens,
+    outputTokens,
+  };
 }

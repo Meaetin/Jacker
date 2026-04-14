@@ -1,11 +1,18 @@
 import { createClient } from "@/utils/supabase/server";
 
+export type UsageActionType =
+  | "email_parse"
+  | "reparse"
+  | "cv_to_profile"
+  | "job_analysis";
+
 interface UserUsageEntry {
   user_id: string;
+  action_type: UsageActionType;
   input_tokens: number;
   output_tokens: number;
-  emails_retrieved: number;
-  emails_scanned: number;
+  emails_retrieved?: number;
+  emails_scanned?: number;
 }
 
 export async function insertUserUsage(entry: UserUsageEntry) {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { JobFitAnalysis } from "@/types/profile";
 
@@ -32,7 +33,11 @@ function MarkdownBlock({ title, body }: { title: string; body: string }) {
 }
 
 export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnalysisWorkspaceProps) {
+  const [inputMode, setInputMode] = useState<"paste" | "url">("paste");
   const [jobDescription, setJobDescription] = useState("");
+  const [jobUrl, setJobUrl] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analyses, setAnalyses] = useState<JobFitAnalysis[]>(initialAnalyses);
@@ -47,7 +52,13 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
       const res = await fetch("/api/job-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_description: jobDescription }),
+        body: JSON.stringify({
+          ...(inputMode === "paste"
+            ? { job_description: jobDescription }
+            : { source_url: jobUrl }),
+          company_name: companyName,
+          job_title: jobTitle,
+        }),
       });
 
       const data = await res.json();
@@ -69,7 +80,7 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
       <div className="card space-y-4">
         <h1 className="text-2xl font-bold text-text-primary">Job Analysis</h1>
         <p className="text-sm text-text-secondary">
-          Paste a job description to evaluate how well your CV and profile match.
+          Paste a job description or provide a URL to evaluate how well your CV and profile match.
         </p>
 
         {!profileReady && (
@@ -78,17 +89,65 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
           </div>
         )}
 
-        <Textarea
-          id="job_description"
-          label="Job Description"
-          rows={12}
-          value={jobDescription}
-          onChange={(e) => setJobDescription(e.target.value)}
-          placeholder="Paste full job description here..."
-        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={inputMode === "paste" ? "primary" : "secondary"}
+            onClick={() => setInputMode("paste")}
+          >
+            Paste JD
+          </Button>
+          <Button
+            type="button"
+            variant={inputMode === "url" ? "primary" : "secondary"}
+            onClick={() => setInputMode("url")}
+          >
+            Use URL
+          </Button>
+        </div>
 
-        <Button onClick={runAnalysis} disabled={loading || !profileReady || jobDescription.trim().length < 50}>
-          {loading ? "Analyzing..." : "Analyze Fit"}
+        {inputMode === "paste" ? (
+          <Textarea
+            id="job_description"
+            label="Job Description"
+            rows={12}
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            placeholder="Paste full job description here..."
+          />
+        ) : (
+          <Input
+            id="job_url"
+            type="url"
+            label="Job Posting URL"
+            value={jobUrl}
+            onChange={(e) => setJobUrl(e.target.value)}
+            placeholder="https://company.com/careers/job-id"
+          />
+        )}
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            id="company_name"
+            label="Company Name (optional)"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="Stripe"
+          />
+          <Input
+            id="job_title"
+            label="Job Title (optional)"
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="Software Engineer"
+          />
+        </div>
+
+        <Button
+          onClick={runAnalysis}
+          disabled={loading || !profileReady || (inputMode === "paste" ? jobDescription.trim().length < 50 : jobUrl.trim().length === 0)}
+        >
+          {loading ? (inputMode === "url" ? "Scraping and analyzing..." : "Analyzing...") : "Analyze Fit"}
         </Button>
 
         {error && <p className="text-sm text-status-rejected">{error}</p>}
@@ -102,6 +161,21 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
               {latest.score}/100 - {bandLabel(latest.band)}
             </span>
           </div>
+          {(latest.job_title || latest.company_name) && (
+            <p className="text-sm text-text-secondary">
+              {[latest.job_title, latest.company_name].filter(Boolean).join(" @ ")}
+            </p>
+          )}
+          {latest.source_url && (
+            <a
+              href={latest.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block text-sm text-brand hover:underline"
+            >
+              {latest.source_url}
+            </a>
+          )}
 
           <MarkdownBlock title="Good Parts" body={latest.strengths_md} />
           <MarkdownBlock title="Bad Parts" body={latest.gaps_md} />
@@ -125,6 +199,21 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
                   {new Date(analysis.created_at).toLocaleString()}
                 </span>
               </div>
+              {(analysis.job_title || analysis.company_name) && (
+                <p className="mt-2 text-sm font-medium text-text-primary">
+                  {[analysis.job_title, analysis.company_name].filter(Boolean).join(" @ ")}
+                </p>
+              )}
+              {analysis.source_url && (
+                <a
+                  href={analysis.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-xs text-brand hover:underline"
+                >
+                  {analysis.source_url}
+                </a>
+              )}
               <p className="mt-2 line-clamp-2 text-sm text-text-secondary">{analysis.job_description}</p>
             </div>
           ))

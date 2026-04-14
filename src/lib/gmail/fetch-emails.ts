@@ -38,13 +38,12 @@ export async function fetchRecentEmails(
   // Gmail API ignores orderBy with `after:` queries, returning newest first.
   // Collect ALL IDs, then reverse to get oldest-first.
   while (true) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const listResponse = await gmail.users.messages.list({
       userId: "me",
       q: query,
       maxResults: PAGE_SIZE,
       pageToken,
-    } as any);
+    });
 
     const messages = listResponse.data.messages ?? [];
 

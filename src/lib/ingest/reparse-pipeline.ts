@@ -1,6 +1,7 @@
 import { parseJobEmail } from "@/lib/parser/parse-email";
 import { logParseResult } from "@/lib/parser/parse-log";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
+import { insertUserUsage } from "@/lib/db/user-usage";
 import { createClient } from "@/utils/supabase/server";
 import type { RawEmail } from "@/types/email";
 
@@ -26,6 +27,9 @@ export async function runReparsePipeline(
   };
 
   console.log(`[reparse] Starting reparse for user ${userId}`);
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
   const supabase = await createClient();
 
@@ -71,6 +75,8 @@ export async function runReparsePipeline(
         bodyText,
       });
 
+      totalInputTokens += parseOutput.inputTokens;
+      totalOutputTokens += parseOutput.outputTokens;
       result.parsed++;
 
       // Update parse_status on raw_email
@@ -124,6 +130,16 @@ export async function runReparsePipeline(
         .update({ parse_status: "failed", parse_error: msg })
         .eq("id", email.id);
     }
+  }
+
+  if (result.parsed > 0) {
+    await insertUserUsage({
+      user_id: userId,
+      action_type: "reparse",
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      emails_scanned: result.parsed,
+    });
   }
 
   console.log(`[reparse] Complete. Total: ${result.total}, Parsed: ${result.parsed}, Skipped: ${result.skipped}, New apps: ${result.newApplications}, Errors: ${result.errors.length}`);
