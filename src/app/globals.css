@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #ffffff;
+  --color-surface-raised: #f9fafb;
+  --color-surface-overlay: #f3f4f6;
+  --color-border: #e5e7eb;
+  --color-border-focus: #6366f1;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  --color-brand: #6366f1;
+  --color-brand-hover: #4f46e5;
+  --color-brand-light: #eef2ff;
+
+  --color-status-applied: #3b82f6;
+  --color-status-interview: #8b5cf6;
+  --color-status-assessment: #f59e0b;
+  --color-status-rejected: #ef4444;
+  --color-status-offer: #10b981;
+  --color-status-unknown: #6b7280;
+}
+
+@layer components {
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+  }
+
+  .card-raised {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 1rem;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    background-color: var(--color-brand);
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--color-brand-hover);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--color-surface-raised);
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .input-field:focus {
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-brand-light);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 9999px;
+  }
+
+  .badge-status-applied {
+    color: var(--color-status-applied);
+    background-color: #eff6ff;
+  }
+
+  .badge-status-interview {
+    color: var(--color-status-interview);
+    background-color: #f5f3ff;
+  }
+
+  .badge-status-assessment {
+    color: var(--color-status-assessment);
+    background-color: #fffbeb;
+  }
+
+  .badge-status-rejected {
+    color: var(--color-status-rejected);
+    background-color: #fef2f2;
+  }
+
+  .badge-status-offer {
+    color: var(--color-status-offer);
+    background-color: #ecfdf5;
+  }
+
+  .badge-status-unknown {
+    color: var(--color-status-unknown);
+    background-color: #f9fafb;
+  }
+}
