@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Tracker Extractor</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        width: 280px;
+        background: #ffffff;
+        color: #111827;
+      }
+
+      .popup-header {
+        padding: 16px 16px 12px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .popup-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #111827;
+      }
+
+      .popup-subtitle {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+
+      .popup-body {
+        padding: 14px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .current-page {
+        font-size: 12px;
+        color: #6b7280;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 8px 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .extract-button {
+        width: 100%;
+        padding: 9px 14px;
+        background: #2563eb;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .extract-button:hover:not(:disabled) {
+        background: #1d4ed8;
+      }
+
+      .extract-button:disabled {
+        background: #93c5fd;
+        cursor: not-allowed;
+      }
+
+      .status-message {
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        display: none;
+      }
+
+      .status-message.success {
+        display: block;
+        background: #ecfdf5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+      }
+
+      .status-message.error {
+        display: block;
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="popup-header">
+      <div class="popup-title">Job Tracker Extractor</div>
+      <div class="popup-subtitle">Send this page to Job Tracker for analysis</div>
+    </div>
+    <div class="popup-body">
+      <div class="current-page" id="current-url">Loading...</div>
+      <button class="extract-button" id="extract-btn">Extract &amp; Send to Job Tracker</button>
+      <div class="status-message" id="status"></div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

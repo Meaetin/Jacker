@@ -15,18 +15,17 @@ export function NavSidebar() {
   return (
     <nav className="nav-sidebar w-56 border-r border-border p-4">
       <Link href="/" className="nav-logo text-lg font-bold text-brand">
-        JobTracker
+        Jacker
       </Link>
       <ul className="nav-links mt-6 space-y-1">
         {NAV_ITEMS.map((item) => (
           <li key={item.href}>
             <Link
               href={item.href}
-              className={`nav-link block rounded-lg px-3 py-2 text-sm transition-colors ${
-                pathname === item.href
+              className={`nav-link block rounded-lg px-3 py-2 text-sm transition-colors ${pathname === item.href
                   ? "bg-brand-light text-brand font-medium"
                   : "text-text-secondary hover:bg-surface-raised hover:text-text-primary"
-              }`}
+                }`}
             >
               {item.label}
             </Link>

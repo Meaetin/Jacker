@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,8 @@ interface JobAnalysisWorkspaceProps {
   initialAnalyses: JobFitAnalysis[];
   profileReady: boolean;
 }
+
+type InputMode = "paste" | "url";
 
 function bandLabel(band: JobFitAnalysis["band"]) {
   if (band === "strong_fit") return "Strong Fit";
@@ -32,8 +34,50 @@ function MarkdownBlock({ title, body }: { title: string; body: string }) {
   );
 }
 
+function HistoryItem({ analysis }: { analysis: JobFitAnalysis }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => setExpanded((prev) => !prev)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setExpanded((prev) => !prev); }}
+      className="analysis-history-item cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-gray-50"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${bandClasses(analysis.band)}`}>
+          {analysis.score}/100 - {bandLabel(analysis.band)}
+        </span>
+        <span className="text-xs text-text-muted" suppressHydrationWarning>
+          {new Date(analysis.created_at).toLocaleString()}
+        </span>
+      </div>
+      {(analysis.job_title || analysis.company_name) && (
+        <p className="mt-2 text-sm font-medium text-text-primary">
+          {[analysis.job_title, analysis.company_name].filter(Boolean).join(" @ ")}
+        </p>
+      )}
+      {analysis.source_url && (
+        <span className="mt-1 inline-block text-xs text-brand hover:underline">
+          {analysis.source_url}
+        </span>
+      )}
+      <div className={expanded ? "" : "line-clamp-3"}>
+        <MarkdownBlock title="Good Parts" body={analysis.strengths_md} />
+        <MarkdownBlock title="Bad Parts" body={analysis.gaps_md} />
+        <MarkdownBlock title="Recommendations" body={analysis.recommendations_md} />
+        <MarkdownBlock title="Overall" body={analysis.overall_feedback_md} />
+      </div>
+      <span className="mt-2 inline-block text-xs text-brand">
+        {expanded ? "Show less" : "Show more"}
+      </span>
+    </div>
+  );
+}
+
 export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnalysisWorkspaceProps) {
-  const [inputMode, setInputMode] = useState<"paste" | "url">("paste");
+  const [inputMode, setInputMode] = useState<InputMode>("paste");
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -44,10 +88,22 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
 
   const latest = analyses[0] ?? null;
 
+  // Listen for prefill events dispatched by the Chrome extension
+  useEffect(() => {
+    function handlePrefill(e: Event) {
+      const { text, url } = (e as CustomEvent<{ text: string; url: string }>).detail;
+      setJobDescription(text.slice(0, 60000));
+      setJobUrl(url);
+      setInputMode("paste");
+      setError(null);
+    }
+    window.addEventListener("job-tracker:prefill", handlePrefill);
+    return () => window.removeEventListener("job-tracker:prefill", handlePrefill);
+  }, []);
+
   async function runAnalysis() {
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch("/api/job-analysis", {
         method: "POST",
@@ -56,18 +112,18 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
           ...(inputMode === "paste"
             ? { job_description: jobDescription }
             : { source_url: jobUrl }),
-          company_name: companyName,
-          job_title: jobTitle,
+          company_name: companyName || undefined,
+          job_title: jobTitle || undefined,
         }),
       });
-
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Analysis failed");
         return;
       }
-
       setAnalyses((prev) => [data.analysis, ...prev]);
+      setJobDescription("");
+      setJobUrl("");
     } catch {
       setError("Analysis failed due to a network error.");
     } finally {
@@ -75,12 +131,19 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
     }
   }
 
+  const canSubmit =
+    profileReady &&
+    !loading &&
+    (inputMode === "paste"
+      ? jobDescription.trim().length >= 50
+      : jobUrl.trim().length > 0);
+
   return (
     <div className="space-y-6">
       <div className="card space-y-4">
         <h1 className="text-2xl font-bold text-text-primary">Job Analysis</h1>
         <p className="text-sm text-text-secondary">
-          Paste a job description or provide a URL to evaluate how well your CV and profile match.
+          Paste a job description or provide a URL. Use the Job Tracker Chrome extension to extract from any page.
         </p>
 
         {!profileReady && (
@@ -89,24 +152,24 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="mode-tabs flex flex-wrap gap-2">
           <Button
             type="button"
             variant={inputMode === "paste" ? "primary" : "secondary"}
-            onClick={() => setInputMode("paste")}
+            onClick={() => { setInputMode("paste"); setError(null); }}
           >
             Paste JD
           </Button>
           <Button
             type="button"
             variant={inputMode === "url" ? "primary" : "secondary"}
-            onClick={() => setInputMode("url")}
+            onClick={() => { setInputMode("url"); setError(null); }}
           >
             Use URL
           </Button>
         </div>
 
-        {inputMode === "paste" ? (
+        {inputMode === "paste" && (
           <Textarea
             id="job_description"
             label="Job Description"
@@ -114,8 +177,11 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             placeholder="Paste full job description here..."
+            disabled={loading}
           />
-        ) : (
+        )}
+
+        {inputMode === "url" && (
           <Input
             id="job_url"
             type="url"
@@ -123,10 +189,11 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
             value={jobUrl}
             onChange={(e) => setJobUrl(e.target.value)}
             placeholder="https://company.com/careers/job-id"
+            disabled={loading}
           />
         )}
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="metadata-fields grid gap-3 md:grid-cols-2">
           <Input
             id="company_name"
             label="Company Name (optional)"
@@ -143,44 +210,65 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
           />
         </div>
 
-        <Button
-          onClick={runAnalysis}
-          disabled={loading || !profileReady || (inputMode === "paste" ? jobDescription.trim().length < 50 : jobUrl.trim().length === 0)}
-        >
+        <Button onClick={runAnalysis} disabled={!canSubmit}>
           {loading ? (inputMode === "url" ? "Scraping and analyzing..." : "Analyzing...") : "Analyze Fit"}
         </Button>
 
         {error && <p className="text-sm text-status-rejected">{error}</p>}
       </div>
 
-      {latest && (
+      {(loading || latest) && (
         <div className="card space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-text-primary">Latest Result</h2>
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${bandClasses(latest.band)}`}>
-              {latest.score}/100 - {bandLabel(latest.band)}
-            </span>
-          </div>
-          {(latest.job_title || latest.company_name) && (
-            <p className="text-sm text-text-secondary">
-              {[latest.job_title, latest.company_name].filter(Boolean).join(" @ ")}
-            </p>
-          )}
-          {latest.source_url && (
-            <a
-              href={latest.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block text-sm text-brand hover:underline"
-            >
-              {latest.source_url}
-            </a>
-          )}
+          {loading ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="h-6 w-36 animate-pulse rounded bg-gray-200" />
+                <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200" />
+              </div>
+              <div className="space-y-3">
+                <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
+                <div className="h-4 w-5/6 animate-pulse rounded bg-gray-200" />
+                <div className="h-4 w-4/6 animate-pulse rounded bg-gray-200" />
+              </div>
+              <div className="space-y-2">
+                {["Good Parts", "Bad Parts", "Feedback", "Overall"].map((title) => (
+                  <div key={title} className="space-y-1">
+                    <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
+                    <div className="h-16 w-full animate-pulse rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : latest && (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-text-primary">Latest Result</h2>
+                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${bandClasses(latest.band)}`}>
+                  {latest.score}/100 - {bandLabel(latest.band)}
+                </span>
+              </div>
+              {(latest.job_title || latest.company_name) && (
+                <p className="text-sm text-text-secondary">
+                  {[latest.job_title, latest.company_name].filter(Boolean).join(" @ ")}
+                </p>
+              )}
+              {latest.source_url && (
+                <a
+                  href={latest.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-sm text-brand hover:underline"
+                >
+                  {latest.source_url}
+                </a>
+              )}
 
-          <MarkdownBlock title="Good Parts" body={latest.strengths_md} />
-          <MarkdownBlock title="Bad Parts" body={latest.gaps_md} />
-          <MarkdownBlock title="Feedback" body={latest.recommendations_md} />
-          <MarkdownBlock title="Overall" body={latest.overall_feedback_md} />
+              <MarkdownBlock title="Good Parts" body={latest.strengths_md} />
+              <MarkdownBlock title="Bad Parts" body={latest.gaps_md} />
+              <MarkdownBlock title="Feedback" body={latest.recommendations_md} />
+              <MarkdownBlock title="Overall" body={latest.overall_feedback_md} />
+            </>
+          )}
         </div>
       )}
 
@@ -189,34 +277,11 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
         {analyses.length === 0 ? (
           <p className="text-sm text-text-secondary">No analyses yet.</p>
         ) : (
-          analyses.map((analysis) => (
-            <div key={analysis.id} className="rounded-lg border border-border p-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${bandClasses(analysis.band)}`}>
-                  {analysis.score}/100 - {bandLabel(analysis.band)}
-                </span>
-                <span className="text-xs text-text-muted">
-                  {new Date(analysis.created_at).toLocaleString()}
-                </span>
-              </div>
-              {(analysis.job_title || analysis.company_name) && (
-                <p className="mt-2 text-sm font-medium text-text-primary">
-                  {[analysis.job_title, analysis.company_name].filter(Boolean).join(" @ ")}
-                </p>
-              )}
-              {analysis.source_url && (
-                <a
-                  href={analysis.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-block text-xs text-brand hover:underline"
-                >
-                  {analysis.source_url}
-                </a>
-              )}
-              <p className="mt-2 line-clamp-2 text-sm text-text-secondary">{analysis.job_description}</p>
-            </div>
-          ))
+          <div className="analysis-history-list space-y-2">
+            {analyses.map((analysis) => (
+              <HistoryItem key={analysis.id} analysis={analysis} />
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Job Tracker Extractor",
+  "version": "1.0.0",
+  "description": "Extract job postings from any page and send them to Job Tracker for analysis.",
+  "permissions": ["activeTab", "tabs", "scripting", "storage"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*"],
+      "js": ["tracker-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Extract Job Posting"
+  }
+}
