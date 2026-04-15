@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Application } from "@/types/application";
 import { StatusBadge } from "./status-badge";
 import { formatDate } from "@/utils/date";
@@ -18,6 +18,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
 }
 
 export function ApplicationTable({ applications }: ApplicationTableProps) {
+  const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("application_updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -43,7 +44,16 @@ export function ApplicationTable({ applications }: ApplicationTableProps) {
   if (applications.length === 0) {
     return (
       <div className="card text-center py-12">
-        <p className="text-text-secondary">No applications found.</p>
+        <div className="empty-state-icon mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-light">
+          <svg className="h-5 w-5 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M22 6l-10 7L2 6" />
+          </svg>
+        </div>
+        <p className="empty-state-title text-text-primary font-medium">No applications yet</p>
+        <p className="empty-state-hint mt-1 text-sm text-text-secondary">
+          Sync your emails or add applications manually to get started.
+        </p>
       </div>
     );
   }
@@ -76,15 +86,13 @@ export function ApplicationTable({ applications }: ApplicationTableProps) {
           {sorted.map((app) => (
             <tr
               key={app.id}
-              className="table-data-row border-b border-border hover:bg-surface-raised transition-colors"
+              onClick={() => router.push(`/dashboard/${app.id}`)}
+              className="table-data-row cursor-pointer border-b border-border transition-colors"
             >
               <td className="table-data-cell py-3 pr-4">
-                <Link
-                  href={`/dashboard/${app.id}`}
-                  className="font-medium text-text-primary hover:text-brand"
-                >
+                <span className="font-medium text-text-primary">
                   {app.company ?? "—"}
-                </Link>
+                </span>
               </td>
               <td className="table-data-cell py-3 pr-4 text-text-secondary">
                 {app.role ?? "—"}

@@ -148,3 +148,13 @@ export async function insertApplication(
 
   return supabase.from("applications").insert(application).select().single();
 }
+
+export async function deleteApplication(id: string, userId: string) {
+  const supabase = await createClient();
+
+  return supabase
+    .from("applications")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+}

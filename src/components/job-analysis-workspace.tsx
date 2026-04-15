@@ -20,9 +20,9 @@ function bandLabel(band: JobFitAnalysis["band"]) {
 }
 
 function bandClasses(band: JobFitAnalysis["band"]) {
-  if (band === "strong_fit") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (band === "moderate_fit") return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-700 border-red-200";
+  if (band === "strong_fit") return "bg-[#edf5ed] text-[#6b9f6b] border-[#c5dfc5]";
+  if (band === "moderate_fit") return "bg-[#faf3e5] text-[#d49b3a] border-[#e8d5a8]";
+  return "bg-[#f8eded] text-[#c47070] border-[#e0c0c0]";
 }
 
 function MarkdownBlock({ title, body }: { title: string; body: string }) {
@@ -43,7 +43,7 @@ function HistoryItem({ analysis }: { analysis: JobFitAnalysis }) {
       tabIndex={0}
       onClick={() => setExpanded((prev) => !prev)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setExpanded((prev) => !prev); }}
-      className="analysis-history-item cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-gray-50"
+      className="analysis-history-item cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-brand-light"
     >
       <div className="flex items-center justify-between gap-3">
         <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${bandClasses(analysis.band)}`}>
@@ -139,15 +139,15 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
       : jobUrl.trim().length > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="card space-y-4">
+    <div className="job-analysis-page space-y-6">
+      <div className="job-input-section card space-y-4">
         <h1 className="text-2xl font-bold text-text-primary">Job Analysis</h1>
         <p className="text-sm text-text-secondary">
           Paste a job description or provide a URL. Use the Job Tracker Chrome extension to extract from any page.
         </p>
 
         {!profileReady && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+          <div className="profile-warning-banner rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
             Set up your CV and profile first on the CV & Profile page.
           </div>
         )}
@@ -218,30 +218,30 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
       </div>
 
       {(loading || latest) && (
-        <div className="card space-y-4">
+        <div className="analysis-result-section card space-y-4">
           {loading ? (
             <>
-              <div className="flex items-center justify-between gap-3">
-                <div className="h-6 w-36 animate-pulse rounded bg-gray-200" />
-                <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200" />
+              <div className="result-header flex items-center justify-between gap-3">
+                <div className="skeleton-title h-6 w-36 animate-pulse rounded bg-surface-raised" />
+                <div className="skeleton-badge h-6 w-24 animate-pulse rounded-full bg-surface-raised" />
               </div>
-              <div className="space-y-3">
-                <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
-                <div className="h-4 w-5/6 animate-pulse rounded bg-gray-200" />
-                <div className="h-4 w-4/6 animate-pulse rounded bg-gray-200" />
+              <div className="skeleton-lines space-y-3">
+                <div className="skeleton-line h-4 w-full animate-pulse rounded bg-surface-raised" />
+                <div className="skeleton-line h-4 w-5/6 animate-pulse rounded bg-surface-raised" />
+                <div className="skeleton-line h-4 w-4/6 animate-pulse rounded bg-surface-raised" />
               </div>
-              <div className="space-y-2">
+              <div className="skeleton-blocks space-y-2">
                 {["Good Parts", "Bad Parts", "Feedback", "Overall"].map((title) => (
                   <div key={title} className="space-y-1">
-                    <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
-                    <div className="h-16 w-full animate-pulse rounded bg-gray-100" />
+                    <div className="h-4 w-24 animate-pulse rounded bg-surface-raised" />
+                    <div className="h-16 w-full animate-pulse rounded bg-surface-overlay" />
                   </div>
                 ))}
               </div>
             </>
           ) : latest && (
             <>
-              <div className="flex items-center justify-between gap-3">
+              <div className="result-header flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold text-text-primary">Latest Result</h2>
                 <span className={`rounded-full border px-3 py-1 text-xs font-medium ${bandClasses(latest.band)}`}>
                   {latest.score}/100 - {bandLabel(latest.band)}
@@ -272,7 +272,7 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
         </div>
       )}
 
-      <div className="card space-y-3">
+      <div className="analysis-history-section card space-y-3">
         <h2 className="text-lg font-semibold text-text-primary">History</h2>
         {analyses.length === 0 ? (
           <p className="text-sm text-text-secondary">No analyses yet.</p>

@@ -1,32 +1,39 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { APPLICATION_STATUSES } from "@/types/application";
 
 export default function DashboardLoading() {
   return (
-    <div className="dashboard-loading">
-      <div className="dashboard-loading-header flex items-center gap-4 mb-6">
-        <Skeleton className="h-8 w-36" />
-        <Skeleton className="h-8 w-32 rounded-lg" />
+    <div className="max-w-[80rem] mx-auto">
+      <div className="dashboard-loading-header flex items-center gap-3 mb-4">
+        <Skeleton className="skeleton-title h-7 w-32" />
+        <Skeleton className="skeleton-toggle h-8 w-64 rounded-lg" />
       </div>
-      <div className="kanban-loading flex gap-3 overflow-x-hidden">
-        {APPLICATION_STATUSES.map((status) => (
-          <div
-            key={status}
-            className="kanban-loading-column flex-shrink-0 w-64 rounded-lg border border-border bg-surface-raised"
-          >
-            <div className="kanban-loading-header flex items-center justify-between px-3 py-2.5 border-b border-border">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-5 w-6 rounded-full" />
-            </div>
-            <div className="kanban-loading-cards flex flex-col gap-2 p-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="kanban-loading-card bg-surface border border-border rounded-lg p-3 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                  <Skeleton className="h-3 w-1/3 mt-2" />
-                </div>
-              ))}
-            </div>
+      <div className="dashboard-loading-stats flex gap-2 mb-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="skeleton-stat h-6 w-24 rounded-full" />
+        ))}
+      </div>
+      <div className="dashboard-loading-controls flex items-center justify-between mb-4">
+        <div className="flex gap-3">
+          <Skeleton className="skeleton-view-toggle h-8 w-48 rounded-lg" />
+          <Skeleton className="skeleton-filter h-8 w-64 rounded-lg" />
+        </div>
+        <Skeleton className="skeleton-sync-btn h-8 w-8 rounded-lg" />
+      </div>
+      <div className="dashboard-loading-table space-y-3">
+        <div className="flex gap-4 pb-3 border-b border-border">
+          <Skeleton className="skeleton-col-head h-4 w-24" />
+          <Skeleton className="skeleton-col-head h-4 w-20" />
+          <Skeleton className="skeleton-col-head h-4 w-16" />
+          <Skeleton className="skeleton-col-head h-4 w-28" />
+          <Skeleton className="skeleton-col-head h-4 w-20" />
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex gap-4 py-3 border-b border-border">
+            <Skeleton className="skeleton-cell h-4 w-32" />
+            <Skeleton className="skeleton-cell h-4 w-28" />
+            <Skeleton className="skeleton-cell h-5 w-20 rounded-full" />
+            <Skeleton className="skeleton-cell h-4 w-24" />
+            <Skeleton className="skeleton-cell h-4 w-40" />
           </div>
         ))}
       </div>

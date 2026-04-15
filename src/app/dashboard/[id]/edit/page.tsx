@@ -19,18 +19,27 @@ export default async function EditPage({ params }: EditPageProps) {
   if (!application) notFound();
 
   return (
-    <div className="edit-page max-w-lg">
-      <div className="mb-6">
+    <div className="edit-page max-w-2xl mx-auto">
+      <nav className="edit-breadcrumbs mb-6 flex items-center gap-1.5 text-sm">
+        <Link
+          href="/dashboard"
+          className="breadcrumb-link text-text-secondary hover:text-brand transition-colors"
+        >
+          Dashboard
+        </Link>
+        <span className="breadcrumb-separator text-text-muted">/</span>
         <Link
           href={`/dashboard/${id}`}
-          className="text-sm text-text-secondary hover:text-brand"
+          className="breadcrumb-link text-text-secondary hover:text-brand transition-colors"
         >
-          Back to Application
+          {application.company ?? "Application"}
         </Link>
-      </div>
+        <span className="breadcrumb-separator text-text-muted">/</span>
+        <span className="breadcrumb-current text-text-primary font-medium">Edit</span>
+      </nav>
 
       <div className="card">
-        <h1 className="text-lg font-bold text-text-primary mb-6">
+        <h1 className="font-display text-lg font-bold text-text-primary mb-6">
           Edit Application
         </h1>
         <ApplicationForm application={application} />

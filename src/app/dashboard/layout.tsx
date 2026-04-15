@@ -21,8 +21,8 @@ export default async function DashboardLayout({
 
   return (
     <div className="dashboard-layout flex min-h-screen">
-      <NavSidebar />
-      <main className="dashboard-main flex-1 p-6">
+      <NavSidebar userEmail={user.email} />
+      <main className="dashboard-main flex-1 min-w-0 p-6 overflow-hidden">
         {isDemoUser && (
           <div className="mb-6">
             <DemoBanner />

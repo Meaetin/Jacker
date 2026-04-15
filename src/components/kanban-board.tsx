@@ -30,12 +30,12 @@ const COLUMN_ACCENT: Record<ApplicationStatus, string> = {
 };
 
 const COUNT_CLASSES: Record<ApplicationStatus, string> = {
-  applied: "bg-blue-100 text-status-applied",
-  assessment: "bg-amber-100 text-status-assessment",
-  interview: "bg-purple-100 text-status-interview",
-  offer: "bg-emerald-100 text-status-offer",
-  rejected: "bg-red-100 text-status-rejected",
-  unknown: "bg-gray-100 text-status-unknown",
+  applied: "badge-status-applied",
+  assessment: "badge-status-assessment",
+  interview: "badge-status-interview",
+  offer: "badge-status-offer",
+  rejected: "badge-status-rejected",
+  unknown: "badge-status-unknown",
 };
 
 interface KanbanCardProps {
@@ -45,7 +45,7 @@ interface KanbanCardProps {
 function KanbanCard({ application }: KanbanCardProps) {
   return (
     <Link href={`/dashboard/${application.id}`}>
-      <div className="kanban-card bg-surface border border-border rounded-lg p-3 hover:border-border-focus hover:shadow-sm transition-all cursor-pointer">
+      <div className="kanban-card">
         <p className="kanban-card-company font-medium text-text-primary text-sm leading-snug">
           {application.company ?? "Unknown Company"}
         </p>
@@ -77,7 +77,7 @@ function KanbanColumn({ status, applications }: KanbanColumnProps) {
         <span className="kanban-column-title text-sm font-semibold text-text-primary">
           {COLUMN_LABELS[status]}
         </span>
-        <span className={`kanban-column-count text-xs font-medium px-1.5 py-0.5 rounded-full ${COUNT_CLASSES[status]}`}>
+        <span className={`kanban-column-count badge ${COUNT_CLASSES[status]}`}>
           {applications.length}
         </span>
       </div>
@@ -108,7 +108,7 @@ export function KanbanBoard({ applications }: KanbanBoardProps) {
   );
 
   return (
-    <div className="kanban-board flex gap-3 overflow-x-auto pb-4">
+    <div className="kanban-board flex gap-3 overflow-x-auto pb-4 min-w-0">
       {COLUMN_ORDER.map((status) => (
         <KanbanColumn
           key={status}

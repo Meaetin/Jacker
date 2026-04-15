@@ -32,9 +32,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="card w-full max-w-sm">
-        <h1 className="text-xl font-bold text-text-primary text-center">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface via-surface-raised to-surface-overlay">
+      <div className="card w-full max-w-sm shadow-soft-md mx-4">
+        <h1 className="font-display text-xl font-bold text-text-primary text-center">
           Job Application Tracker
         </h1>
 
@@ -108,12 +108,16 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-text-secondary">
-          Or{" "}
-          <a href="/demo-login" className="text-brand hover:underline">
-            try the demo
-          </a>
-        </p>
+        <form className="mt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            className="demo-button w-full"
+            onClick={() => { window.location.href = "/demo-login"; }}
+          >
+            Try the Demo
+          </Button>
+        </form>
       </div>
     </main>
   );

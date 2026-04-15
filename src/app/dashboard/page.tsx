@@ -94,23 +94,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="dashboard-page">
       <div className="dashboard-header mb-6">
-        <h1 className="text-2xl font-bold text-text-primary">Applications</h1>
+        <h1 className="font-display text-2xl font-bold text-text-primary">Applications</h1>
       </div>
 
       {params.gmail === "connected" && (
-        <div className="gmail-success-banner mb-4 rounded-lg bg-green-50 text-status-offer text-sm p-3">
+        <div className="gmail-success-banner mb-4 rounded-lg bg-brand-light border border-brand/20 text-brand text-sm p-3">
           Gmail connected successfully. Sync your emails to get started.
         </div>
       )}
 
       {params.error === "gmail_no_code" && (
-        <div className="gmail-error-banner mb-4 rounded-lg bg-red-50 text-status-rejected text-sm p-3">
+        <div className="gmail-error-banner mb-4 rounded-lg bg-red-50/60 border border-status-rejected/20 text-status-rejected text-sm p-3">
           Gmail connection was cancelled.
         </div>
       )}
 
       {params.error === "gmail_no_refresh_token" && (
-        <div className="gmail-error-banner mb-4 rounded-lg bg-red-50 text-status-rejected text-sm p-3">
+        <div className="gmail-error-banner mb-4 rounded-lg bg-red-50/60 border border-status-rejected/20 text-status-rejected text-sm p-3">
           Gmail did not return a refresh token. Please try again.
         </div>
       )}

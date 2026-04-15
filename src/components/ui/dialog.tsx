@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 
 interface DialogProps {
   trigger: React.ReactNode;
@@ -9,7 +10,12 @@ interface DialogProps {
   onClose?: () => void;
 }
 
-export function Dialog({ trigger, children, open: controlledOpen, onClose }: DialogProps) {
+export function Dialog({
+  trigger,
+  children,
+  open: controlledOpen,
+  onClose,
+}: DialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen ?? internalOpen;
 
@@ -18,22 +24,42 @@ export function Dialog({ trigger, children, open: controlledOpen, onClose }: Dia
       <div onClick={() => !controlledOpen && setInternalOpen(true)}>
         {trigger}
       </div>
-      {isOpen && (
-        <div className="dialog-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="dialog-content card max-w-lg w-full mx-4">
-            <button
-              className="dialog-close ml-auto block text-text-secondary hover:text-text-primary"
-              onClick={() => {
-                setInternalOpen(false);
-                onClose?.();
-              }}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="dialog-overlay fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backgroundColor: "rgba(42, 33, 24, 0.4)" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => {
+              setInternalOpen(false);
+              onClose?.();
+            }}
+          >
+            <motion.div
+              className="dialog-content card max-w-lg w-full mx-4"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
             >
-              Close
-            </button>
-            {children}
-          </div>
-        </div>
-      )}
+              <button
+                className="dialog-close ml-auto block text-text-secondary hover:text-text-primary transition-colors"
+                onClick={() => {
+                  setInternalOpen(false);
+                  onClose?.();
+                }}
+              >
+                Close
+              </button>
+              {children}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

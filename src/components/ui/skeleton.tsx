@@ -1,7 +1,16 @@
-export function Skeleton({ className }: { className?: string }) {
+import { cn } from "@/utils/cn";
+
+interface SkeletonProps {
+  className?: string;
+}
+
+export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded-lg bg-surface-overlay ${className ?? ""}`}
+      className={cn(
+        "skeleton-block animate-pulse rounded-md bg-surface-raised",
+        className,
+      )}
     />
   );
 }

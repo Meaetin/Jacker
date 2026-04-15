@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { getApplicationById, updateApplication } from "@/lib/db/applications";
+import { getApplicationById, updateApplication, deleteApplication } from "@/lib/db/applications";
 import { editableFieldsSchema } from "@/types/schemas";
 
 interface RouteContext {
@@ -61,4 +61,24 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json(data);
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { error } = await deleteApplication(id, user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { RefreshCw, LoaderCircle, X } from "lucide-react";
 
 interface DashboardActionsProps {
   gmailConnected: boolean;
@@ -27,46 +27,44 @@ interface ReparseResult {
   duration?: string;
 }
 
-function Spinner() {
-  return (
-    <svg
-      className="sync-spinner h-4 w-4 animate-spin"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-}
-
 export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [reparsing, setReparsing] = useState(false);
   const [syncFromDate, setSyncFromDate] = useState("");
-  const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [reparseResult, setReparseResult] = useState<ReparseResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [reparseError, setReparseError] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const busy = syncing || reparsing;
 
+  useEffect(() => {
+    if (!syncResult && !reparseResult && !syncError && !reparseError) return;
+    const timer = setTimeout(() => {
+      setSyncResult(null);
+      setReparseResult(null);
+      setSyncError(null);
+      setReparseError(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [syncResult, reparseResult, syncError, reparseError]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   async function handleSync() {
     setSyncing(true);
-    setSyncOptionsOpen(false);
+    setDropdownOpen(false);
     setSyncResult(null);
     setSyncError(null);
 
@@ -97,6 +95,7 @@ export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
 
   async function handleReparse() {
     setReparsing(true);
+    setDropdownOpen(false);
     setReparseResult(null);
     setReparseError(null);
 
@@ -120,25 +119,23 @@ export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
     }
   }
 
+  function dismissResult() {
+    setSyncResult(null);
+    setReparseResult(null);
+    setSyncError(null);
+    setReparseError(null);
+  }
+
   if (!gmailConnected) {
     return (
       <div className="gmail-connect-prompt card text-center py-12">
         <div className="gmail-connect-icon mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-light">
-          <svg
-            className="h-6 w-6 text-brand"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-            />
+          <svg className="h-6 w-6 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M22 6l-10 7L2 6" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold text-text-primary">
+        <h2 className="font-display text-lg font-semibold text-text-primary">
           Connect your Gmail
         </h2>
         <p className="mt-2 text-sm text-text-secondary max-w-sm mx-auto">
@@ -153,150 +150,104 @@ export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
   }
 
   return (
-    <div className="sync-actions flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <div className="sync-dropdown-container relative">
-          <Button
-            onClick={() => {
-              if (syncOptionsOpen) {
-                handleSync();
-              } else {
-                setSyncOptionsOpen(true);
-              }
-            }}
-            disabled={busy}
-            className={syncing ? "opacity-60 cursor-not-allowed" : ""}
-          >
-            {syncing ? (
-              <span className="sync-button-loading flex items-center gap-2">
-                <Spinner />
-                Syncing…
-              </span>
-            ) : syncOptionsOpen ? (
-              "Start Sync"
-            ) : (
-              "Sync Emails"
-            )}
-          </Button>
+    <div className="sync-actions flex flex-col gap-2">
+      <div ref={dropdownRef} className="sync-dropdown relative">
+        <button
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          disabled={busy}
+          className="sync-toggle-button flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary disabled:opacity-60"
+        >
+          {busy ? (
+            <LoaderCircle className="sync-spinner h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="sync-icon h-4 w-4" />
+          )}
+          {syncing ? "Syncing…" : reparsing ? "Parsing…" : "Sync"}
+        </button>
 
-          {syncOptionsOpen && !busy && (
-            <div className="sync-options-dropdown absolute top-full left-0 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg z-10">
-              <div className="sync-date-field flex flex-col gap-1">
-                <label htmlFor="sync-from-date" className="text-xs font-medium text-text-secondary">
-                  Sync from date
-                </label>
-                <input
-                  id="sync-from-date"
-                  type="date"
-                  value={syncFromDate}
-                  onChange={(e) => setSyncFromDate(e.target.value)}
-                  className="sync-date-input rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                />
-                <p className="sync-date-hint text-xs text-text-secondary">
-                  Leave empty to sync since last sync
-                </p>
-              </div>
+        {dropdownOpen && !busy && (
+          <div className="sync-options-dropdown absolute right-0 top-full mt-2 w-64 rounded-lg border border-border bg-surface p-3 shadow-soft-md z-10">
+            <div className="sync-date-field flex flex-col gap-1 mb-3">
+              <label htmlFor="sync-from-date" className="text-xs font-medium text-text-secondary">
+                Sync from date
+              </label>
+              <input
+                id="sync-from-date"
+                type="date"
+                value={syncFromDate}
+                onChange={(e) => setSyncFromDate(e.target.value)}
+                className="sync-date-input input-field text-sm"
+              />
+            </div>
+            <div className="sync-action-buttons flex flex-col gap-2">
               <button
-                className="sync-options-cancel mt-2 text-xs text-text-secondary hover:text-text-primary"
-                onClick={() => setSyncOptionsOpen(false)}
+                onClick={handleSync}
+                className="sync-start-button btn-primary text-sm w-full"
               >
-                Cancel
+                Sync Emails
+              </button>
+              <button
+                onClick={handleReparse}
+                className="reparse-start-button btn-secondary text-sm w-full"
+              >
+                Re-parse Stored Emails
               </button>
             </div>
-          )}
-        </div>
-
-        <Button
-          variant="secondary"
-          onClick={handleReparse}
-          disabled={busy}
-          className={reparsing ? "opacity-60 cursor-not-allowed" : ""}
-        >
-          {reparsing ? (
-            <span className="reparse-button-loading flex items-center gap-2">
-              <Spinner />
-              Parsing…
-            </span>
-          ) : (
-            "Re-parse Stored Emails"
-          )}
-        </Button>
-
-        {busy && (
-          <span className="action-progress-hint text-sm text-text-secondary animate-pulse">
-            {syncing
-              ? "Fetching and parsing emails — this may take a moment"
-              : "Re-parsing stored emails — this may take a moment"}
-          </span>
+          </div>
         )}
       </div>
 
-      {syncError && (
-        <div className="sync-error-banner rounded-lg bg-red-50 border border-red-200 text-sm text-status-rejected p-3">
-          Sync failed: {syncError}
-        </div>
-      )}
-
-      {reparseError && (
-        <div className="reparse-error-banner rounded-lg bg-red-50 border border-red-200 text-sm text-status-rejected p-3">
-          Re-parse failed: {reparseError}
-        </div>
-      )}
-
-      {syncResult && !syncError && (
-        <div className="sync-result-banner rounded-lg bg-emerald-50 border border-emerald-200 text-sm p-3">
-          <div className="sync-result-summary font-medium text-emerald-800">
-            Sync complete{syncResult.duration ? ` in ${syncResult.duration}` : ""}
-          </div>
-          <div className="sync-result-details mt-1 text-emerald-700 space-y-0.5">
-            <p>
-              {syncResult.fetched} emails fetched, {syncResult.newEmails} new
-            </p>
-            {syncResult.parsed > 0 && (
-              <p>{syncResult.parsed} parsed by AI</p>
-            )}
-            {syncResult.newApplications > 0 && (
-              <p className="font-medium">
-                {syncResult.newApplications} new application{syncResult.newApplications !== 1 ? "s" : ""} found
-              </p>
-            )}
-            {syncResult.newEmails === 0 && (
-              <p>No new emails since last sync</p>
-            )}
-          </div>
-          {syncResult.errors.length > 0 && (
-            <div className="sync-result-errors mt-2 pt-2 border-t border-emerald-200 text-amber-700">
-              <p className="font-medium">
-                {syncResult.errors.length} error{syncResult.errors.length !== 1 ? "s" : ""} occurred
-              </p>
+      {(syncResult || syncError || reparseResult || reparseError) && (
+        <div className="sync-toast">
+          {syncError && (
+            <div className="sync-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
+              <p className="flex-1">Sync failed: {syncError}</p>
+              <button onClick={dismissResult} className="sync-dismiss text-status-rejected/60 hover:text-status-rejected">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
-        </div>
-      )}
 
-      {reparseResult && !reparseError && (
-        <div className="reparse-result-banner rounded-lg bg-blue-50 border border-blue-200 text-sm p-3">
-          <div className="reparse-result-summary font-medium text-blue-800">
-            Re-parse complete{reparseResult.duration ? ` in ${reparseResult.duration}` : ""}
-          </div>
-          <div className="reparse-result-details mt-1 text-blue-700 space-y-0.5">
-            <p>
-              {reparseResult.total} stored emails, {reparseResult.parsed} parsed, {reparseResult.skipped} skipped
-            </p>
-            {reparseResult.newApplications > 0 && (
-              <p className="font-medium">
-                {reparseResult.newApplications} new application{reparseResult.newApplications !== 1 ? "s" : ""} found
-              </p>
-            )}
-            {reparseResult.parsed === 0 && (
-              <p>No emails to parse</p>
-            )}
-          </div>
-          {reparseResult.errors.length > 0 && (
-            <div className="reparse-result-errors mt-2 pt-2 border-t border-blue-200 text-amber-700">
-              <p className="font-medium">
-                {reparseResult.errors.length} error{reparseResult.errors.length !== 1 ? "s" : ""} occurred
-              </p>
+          {reparseError && (
+            <div className="reparse-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
+              <p className="flex-1">Re-parse failed: {reparseError}</p>
+              <button onClick={dismissResult} className="reparse-dismiss text-status-rejected/60 hover:text-status-rejected">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {syncResult && !syncError && (
+            <div className="sync-success-toast flex items-start gap-2 rounded-lg bg-brand-light border border-brand/20 text-sm p-3">
+              <div className="sync-toast-body flex-1">
+                <p className="font-medium text-brand">
+                  Sync complete{syncResult.duration ? ` in ${syncResult.duration}` : ""}
+                </p>
+                <p className="text-brand/80">
+                  {syncResult.fetched} fetched, {syncResult.newEmails} new
+                  {syncResult.newApplications > 0 && ` — ${syncResult.newApplications} new application${syncResult.newApplications !== 1 ? "s" : ""}`}
+                </p>
+              </div>
+              <button onClick={dismissResult} className="sync-dismiss text-brand/40 hover:text-brand">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {reparseResult && !reparseError && (
+            <div className="reparse-success-toast flex items-start gap-2 rounded-lg bg-brand-light border border-brand/20 text-sm p-3">
+              <div className="reparse-toast-body flex-1">
+                <p className="font-medium text-brand">
+                  Re-parse complete{reparseResult.duration ? ` in ${reparseResult.duration}` : ""}
+                </p>
+                <p className="text-brand/80">
+                  {reparseResult.parsed} parsed, {reparseResult.skipped} skipped
+                  {reparseResult.newApplications > 0 && ` — ${reparseResult.newApplications} new application${reparseResult.newApplications !== 1 ? "s" : ""}`}
+                </p>
+              </div>
+              <button onClick={dismissResult} className="reparse-dismiss text-brand/40 hover:text-brand">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
         </div>

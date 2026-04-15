@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { CandidateProfileData, CandidateProfileRecord } from "@/types/profile";
+import { Plus, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import type { CandidateProfileData, CandidateProfileRecord, RoleArchetype, ProofPoint } from "@/types/profile";
 import { DEFAULT_PROFILE_DATA } from "@/lib/profile/defaults";
 
 interface ProfileWorkspaceProps {
@@ -18,16 +20,138 @@ function splitLines(value: string): string[] {
     .filter(Boolean);
 }
 
-function toPrettyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
+function ArchetypeEditor({
+  archetypes,
+  onChange,
+}: {
+  archetypes: RoleArchetype[];
+  onChange: (value: RoleArchetype[]) => void;
+}) {
+  function addArchetype() {
+    onChange([...archetypes, { name: "", level: "", fit: "secondary" }]);
+  }
+
+  function updateArchetype(index: number, field: keyof RoleArchetype, value: string) {
+    const updated = [...archetypes];
+    updated[index] = { ...updated[index], [field]: value };
+    onChange(updated);
+  }
+
+  function removeArchetype(index: number) {
+    onChange(archetypes.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="archetype-editor space-y-3">
+      {archetypes.map((archetype, i) => (
+        <div key={i} className="archetype-card flex items-start gap-2 rounded-lg border border-border bg-surface p-3">
+          <div className="archetype-fields flex-1 grid gap-2 sm:grid-cols-3">
+            <Input
+              label="Name"
+              value={archetype.name}
+              onChange={(e) => updateArchetype(i, "name", e.target.value)}
+              placeholder="Senior Backend Engineer"
+            />
+            <Input
+              label="Level"
+              value={archetype.level}
+              onChange={(e) => updateArchetype(i, "level", e.target.value)}
+              placeholder="Senior"
+            />
+            <div className="archetype-fit-field flex flex-col gap-1">
+              <label className="text-xs font-medium text-text-secondary">Fit</label>
+              <select
+                value={archetype.fit}
+                onChange={(e) => updateArchetype(i, "fit", e.target.value)}
+                className="input-field text-sm"
+              >
+                <option value="primary">Primary</option>
+                <option value="secondary">Secondary</option>
+                <option value="adjacent">Adjacent</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={() => removeArchetype(i)}
+            className="archetype-remove mt-5 flex-shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-status-rejected"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={addArchetype}
+        className="archetype-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
+      >
+        <Plus className="h-4 w-4" />
+        Add archetype
+      </button>
+    </div>
+  );
 }
 
-function safeJsonParse<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
+function ProofPointEditor({
+  proofPoints,
+  onChange,
+}: {
+  proofPoints: ProofPoint[];
+  onChange: (value: ProofPoint[]) => void;
+}) {
+  function addProofPoint() {
+    onChange([...proofPoints, { name: "", url: "", hero_metric: "" }]);
   }
+
+  function updateProofPoint(index: number, field: keyof ProofPoint, value: string) {
+    const updated = [...proofPoints];
+    updated[index] = { ...updated[index], [field]: value };
+    onChange(updated);
+  }
+
+  function removeProofPoint(index: number) {
+    onChange(proofPoints.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="proof-point-editor space-y-3">
+      {proofPoints.map((point, i) => (
+        <div key={i} className="proof-point-card flex items-start gap-2 rounded-lg border border-border bg-surface p-3">
+          <div className="proof-point-fields flex-1 grid gap-2 sm:grid-cols-3">
+            <Input
+              label="Name"
+              value={point.name}
+              onChange={(e) => updateProofPoint(i, "name", e.target.value)}
+              placeholder="Led platform migration"
+            />
+            <Input
+              label="URL"
+              value={point.url}
+              onChange={(e) => updateProofPoint(i, "url", e.target.value)}
+              placeholder="https://..."
+            />
+            <Input
+              label="Metric"
+              value={point.hero_metric}
+              onChange={(e) => updateProofPoint(i, "hero_metric", e.target.value)}
+              placeholder="3x throughput improvement"
+            />
+          </div>
+          <button
+            onClick={() => removeProofPoint(i)}
+            className="proof-point-remove mt-5 flex-shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-status-rejected"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={addProofPoint}
+        className="proof-point-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
+      >
+        <Plus className="h-4 w-4" />
+        Add proof point
+      </button>
+    </div>
+  );
 }
 
 export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
@@ -38,14 +162,28 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
 
   const [primaryRolesText, setPrimaryRolesText] = useState(initialData.target_roles.primary.join("\n"));
   const [superpowersText, setSuperpowersText] = useState(initialData.narrative.superpowers.join("\n"));
-  const [archetypesJson, setArchetypesJson] = useState(toPrettyJson(initialData.target_roles.archetypes));
-  const [proofPointsJson, setProofPointsJson] = useState(toPrettyJson(initialData.narrative.proof_points));
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const initialCvMarkdown = initialProfile?.cv_markdown ?? "";
+
+  const isDirty = useMemo(() => {
+    if (cvMarkdown !== initialCvMarkdown) return true;
+    if (primaryRolesText !== initialData.target_roles.primary.join("\n")) return true;
+    if (superpowersText !== initialData.narrative.superpowers.join("\n")) return true;
+    if (JSON.stringify(profileData.candidate) !== JSON.stringify(initialData.candidate)) return true;
+    if (JSON.stringify(profileData.target_roles.archetypes) !== JSON.stringify(initialData.target_roles.archetypes)) return true;
+    if (JSON.stringify(profileData.narrative.proof_points) !== JSON.stringify(initialData.narrative.proof_points)) return true;
+    if (profileData.narrative.headline !== initialData.narrative.headline) return true;
+    if (profileData.narrative.exit_story !== initialData.narrative.exit_story) return true;
+    if (JSON.stringify(profileData.compensation) !== JSON.stringify(initialData.compensation)) return true;
+    if (JSON.stringify(profileData.location) !== JSON.stringify(initialData.location)) return true;
+    return false;
+  }, [cvMarkdown, primaryRolesText, superpowersText, profileData, initialCvMarkdown, initialData]);
 
   const lastUpdated = useMemo(() => {
     if (!initialProfile?.updated_at) return null;
@@ -76,6 +214,14 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
 
   function updateNarrativeField(field: keyof Omit<CandidateProfileData["narrative"], "superpowers" | "proof_points">, value: string) {
     updateProfile("narrative", { ...profileData.narrative, [field]: value });
+  }
+
+  function updateArchetypes(archetypes: RoleArchetype[]) {
+    updateProfile("target_roles", { ...profileData.target_roles, archetypes });
+  }
+
+  function updateProofPoints(proofPoints: ProofPoint[]) {
+    updateProfile("narrative", { ...profileData.narrative, proof_points: proofPoints });
   }
 
   async function handleUpload(formData: FormData) {
@@ -109,8 +255,6 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
       setProfileData(generated.profile_data);
       setPrimaryRolesText(generated.profile_data.target_roles.primary.join("\n"));
       setSuperpowersText(generated.profile_data.narrative.superpowers.join("\n"));
-      setArchetypesJson(toPrettyJson(generated.profile_data.target_roles.archetypes));
-      setProofPointsJson(toPrettyJson(generated.profile_data.narrative.proof_points));
       setSuccessMessage("CV uploaded and profile generated.");
     } catch {
       setUploadError("Upload failed due to a network error.");
@@ -124,31 +268,15 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
     setSaveError(null);
     setSuccessMessage(null);
 
-    const archetypes = safeJsonParse<CandidateProfileData["target_roles"]["archetypes"]>(archetypesJson);
-    if (!archetypes || !Array.isArray(archetypes)) {
-      setSaving(false);
-      setSaveError("Target role archetypes must be valid JSON array.");
-      return;
-    }
-
-    const proofPoints = safeJsonParse<CandidateProfileData["narrative"]["proof_points"]>(proofPointsJson);
-    if (!proofPoints || !Array.isArray(proofPoints)) {
-      setSaving(false);
-      setSaveError("Proof points must be valid JSON array.");
-      return;
-    }
-
     const payload: CandidateProfileData = {
       ...profileData,
       target_roles: {
         ...profileData.target_roles,
         primary: splitLines(primaryRolesText),
-        archetypes,
       },
       narrative: {
         ...profileData.narrative,
         superpowers: splitLines(superpowersText),
-        proof_points: proofPoints,
       },
     };
 
@@ -178,14 +306,14 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
   }
 
   return (
-    <div className="profile-page space-y-6">
-      <div className="card space-y-4">
-        <h1 className="text-2xl font-bold text-text-primary">CV & Profile</h1>
-        <p className="text-sm text-text-secondary">
+    <div className="profile-page space-y-6 max-w-4xl mx-auto">
+      <div className="profile-upload-section card space-y-4">
+        <h1 className="profile-title font-display text-2xl font-bold text-text-primary">CV & Profile</h1>
+        <p className="profile-description text-sm text-text-secondary">
           Upload a PDF CV to auto-generate your markdown CV and profile draft. Then edit and save.
         </p>
 
-        <form action={handleUpload} className="space-y-3">
+        <form action={handleUpload} className="cv-upload-form space-y-3">
           <Input id="cv" name="cv" type="file" accept="application/pdf" label="Upload CV (PDF)" />
           <Button type="submit" disabled={uploading}>
             {uploading ? "Uploading..." : "Upload and Generate"}
@@ -198,7 +326,7 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
         {successMessage && <p className="text-sm text-status-offer">{successMessage}</p>}
       </div>
 
-      <div className="card space-y-4">
+      <div className="cv-markdown-section card space-y-4">
         <Textarea
           id="cv_markdown"
           label="CV Markdown"
@@ -208,9 +336,9 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
         />
       </div>
 
-      <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">Candidate</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <div className="candidate-info-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Candidate</h2>
+        <div className="candidate-fields-grid grid gap-3 sm:grid-cols-2">
           <Input label="Full name" value={profileData.candidate.full_name} onChange={(e) => updateCandidateField("full_name", e.target.value)} />
           <Input label="Email" value={profileData.candidate.email} onChange={(e) => updateCandidateField("email", e.target.value)} />
           <Input label="Phone" value={profileData.candidate.phone} onChange={(e) => updateCandidateField("phone", e.target.value)} />
@@ -222,33 +350,40 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
         </div>
       </div>
 
-      <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">Target Roles</h2>
+      <div className="target-roles-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Target Roles</h2>
         <Textarea
           label="Primary roles (one per line)"
           rows={4}
           value={primaryRolesText}
           onChange={(e) => setPrimaryRolesText(e.target.value)}
         />
-        <Textarea
-          label="Archetypes JSON"
-          rows={8}
-          value={archetypesJson}
-          onChange={(e) => setArchetypesJson(e.target.value)}
-        />
+        <div className="archetypes-section">
+          <h3 className="text-sm font-medium text-text-secondary mb-2">Archetypes</h3>
+          <ArchetypeEditor
+            archetypes={profileData.target_roles.archetypes}
+            onChange={updateArchetypes}
+          />
+        </div>
       </div>
 
-      <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">Narrative</h2>
+      <div className="narrative-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Narrative</h2>
         <Input label="Headline" value={profileData.narrative.headline} onChange={(e) => updateNarrativeField("headline", e.target.value)} />
         <Textarea label="Exit story" rows={3} value={profileData.narrative.exit_story} onChange={(e) => updateNarrativeField("exit_story", e.target.value)} />
         <Textarea label="Superpowers (one per line)" rows={4} value={superpowersText} onChange={(e) => setSuperpowersText(e.target.value)} />
-        <Textarea label="Proof points JSON" rows={8} value={proofPointsJson} onChange={(e) => setProofPointsJson(e.target.value)} />
+        <div className="proof-points-section">
+          <h3 className="text-sm font-medium text-text-secondary mb-2">Proof Points</h3>
+          <ProofPointEditor
+            proofPoints={profileData.narrative.proof_points}
+            onChange={updateProofPoints}
+          />
+        </div>
       </div>
 
-      <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">Compensation & Location</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <div className="compensation-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Compensation & Location</h2>
+        <div className="compensation-fields-grid grid gap-3 sm:grid-cols-2">
           <Input label="Target range" value={profileData.compensation.target_range} onChange={(e) => updateCompensationField("target_range", e.target.value)} />
           <Input label="Currency" value={profileData.compensation.currency} onChange={(e) => updateCompensationField("currency", e.target.value)} />
           <Input label="Minimum" value={profileData.compensation.minimum} onChange={(e) => updateCompensationField("minimum", e.target.value)} />
@@ -260,11 +395,32 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pb-8">
+      <div className="save-profile-actions flex items-center gap-3 pb-20">
         <Button onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save Profile"}
         </Button>
       </div>
+
+      <AnimatePresence>
+        {isDirty && !saving && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="sticky-save-bar fixed bottom-0 right-0 left-56 z-40 border-t border-border bg-surface px-6 py-3 shadow-soft-md"
+          >
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <span className="sticky-save-hint text-sm text-text-secondary">
+                Unsaved changes
+              </span>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Profile"}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
