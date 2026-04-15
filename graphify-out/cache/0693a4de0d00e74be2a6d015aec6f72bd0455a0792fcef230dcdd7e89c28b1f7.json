@@ -1,0 +1,1 @@
+{"nodes": [{"id": "parse_log_panel", "label": "parse-log-panel.tsx", "file_type": "code", "source_file": "src\\components\\parse-log-panel.tsx", "source_location": "L1"}], "edges": [{"source": "parse_log_panel", "target": "react", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "src\\components\\parse-log-panel.tsx", "source_location": "L3", "weight": 1.0}]}

@@ -1,5 +1,51 @@
 # Job Tracker
 
+## Codebase Navigation
+
+A knowledge graph of this codebase lives in `graphify-out/`. Use it before touching unfamiliar areas.
+
+- **`graphify-out/graph.html`** — interactive visualization, open in any browser. Nodes are colored by community; click any node to see its connections.
+- **`graphify-out/GRAPH_REPORT.md`** — god nodes, surprising connections, knowledge gaps.
+- **`graphify-out/graph.json`** — raw graph data for programmatic queries.
+
+### Key communities (23 detected)
+
+| Community | Cohesion | Core files |
+|---|---|---|
+| Job Fit Analysis & Profile | 0.09 | `lib/profile/`, `app/dashboard/job-analysis/` |
+| Gmail Client & Auth Layer | 0.08 | `lib/gmail/`, `utils/supabase/` |
+| Application Table & Display | 0.09 | `components/application-table.tsx`, `utils/date.ts` |
+| Forms & UI Components | 0.10 | `components/application-form.tsx`, `components/ui/` |
+| Job Analysis Chat UI | 0.12 | `components/job-analysis/` |
+| Dashboard Interactions | 0.12 | `app/dashboard/page.tsx` |
+| Email Ingestion & Filter | 0.15 | `lib/gmail/`, `lib/filter/`, `lib/ingest/` |
+| Application Database CRUD | 0.14 | `lib/db/applications.ts`, `lib/ingest/` |
+| Profile Workspace | 0.17 | `components/profile-workspace.tsx` |
+| Design System Tokens | 0.15 | `app/globals.css`, `CLAUDE.md` |
+| Document Export | 0.46 | `lib/profile/generate-document.ts` |
+| Job Posting Scraper | 0.73 | `lib/profile/scrape-job-posting.ts` |
+| Chrome Ext Background/Popup/Bridge | — | `src/` extension files |
+
+### God nodes (highest betweenness — touch these carefully)
+
+1. `Warm/Organic Design System` — 13 edges, bridges design tokens and the full UI layer
+2. `updateProfile()` — 7 edges, central to profile workspace and analysis flow
+3. `AI Parser Component` — 7 edges, connects ingestion pipeline to DB and API
+4. `scrapeJobPosting()` — 5 edges, tightly coupled within its own module (cohesion 0.73)
+
+### Rule: Use the graph before searching the codebase
+
+**Before using Grep, Glob, or Read to find code**, query the graph first:
+
+1. Run `/graphify query "<what you're looking for>"` to find relevant nodes and their source files.
+2. Use the returned `source_file` and `source_location` to go directly to the right file.
+3. Only fall back to Grep/Glob if the graph returns no useful matches.
+
+This applies to: finding where a feature lives, tracing a data flow, locating a component, understanding what calls what.
+
+To query the graph: `/graphify query "<question>"` or `/graphify explain "<node name>"`
+To update after code changes: `/graphify . --update`
+
 ## Design System — Warm/Organic Aesthetic
 
 This project uses a **warm/organic** visual identity — sage greens, warm creams, soft shadows. Never default to generic blue/indigo, Inter font, or flat white surfaces.
