@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
 import { ApplicationTable } from "@/components/application-table";
 import { KanbanBoard } from "@/components/kanban-board";
 import { FilterBar } from "@/components/filter-bar";
 import { DashboardActions } from "@/components/dashboard-actions";
 import { ViewToggle } from "@/components/view-toggle";
+import { Dialog } from "@/components/ui/dialog";
+import { ContextMenu } from "@/components/ui/context-menu";
+import { ApplicationForm } from "@/components/application-form";
+import { DeleteConfirmDialog } from "@/components/delete-confirm-dialog";
 import type { Application, ApplicationStatus } from "@/types/application";
 
 const STATUS_SUMMARY_ORDER: ApplicationStatus[] = [
@@ -49,9 +55,31 @@ export function ApplicationsContent({
   initialStatus,
   initialSearch,
 }: ApplicationsContentProps) {
+  const router = useRouter();
   const [view, setView] = useState<"table" | "kanban">(initialView);
   const [status, setStatus] = useState(initialStatus);
   const [search, setSearch] = useState(initialSearch);
+
+  // Local mutable copy for optimistic updates
+  const [localApplications, setLocalApplications] = useState(applications);
+  useEffect(() => {
+    setLocalApplications(applications);
+  }, [applications]);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    applicationId: string;
+  } | null>(null);
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingApplication, setEditingApplication] = useState<Application | null>(null);
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingApplication, setDeletingApplication] = useState<Application | null>(null);
 
   function handleViewChange(next: "table" | "kanban") {
     setView(next);
@@ -93,8 +121,76 @@ export function ApplicationsContent({
     window.history.replaceState({}, "", url.toString());
   }
 
+  // Context menu handlers
+  function handleContextMenu(e: React.MouseEvent, applicationId: string) {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, applicationId });
+  }
+
+  function handleEditFromMenu() {
+    const app = localApplications.find((a) => a.id === contextMenu?.applicationId);
+    if (app) {
+      setEditingApplication(app);
+      setEditDialogOpen(true);
+    }
+    setContextMenu(null);
+  }
+
+  function handleDeleteFromMenu() {
+    const app = localApplications.find((a) => a.id === contextMenu?.applicationId);
+    if (app) {
+      setDeletingApplication(app);
+      setDeleteDialogOpen(true);
+    }
+    setContextMenu(null);
+  }
+
+  // DnD status change handler (optimistic)
+  function handleDragStatusChange(applicationId: string, newStatus: ApplicationStatus) {
+    const prevApp = localApplications.find((a) => a.id === applicationId);
+    if (!prevApp) return;
+
+    // Optimistic update
+    setLocalApplications((prev) =>
+      prev.map((a) => (a.id === applicationId ? { ...a, status: newStatus } : a))
+    );
+
+    fetch(`/api/applications/${applicationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    }).then((res) => {
+      if (!res.ok) {
+        // Rollback on failure
+        setLocalApplications((prev) =>
+          prev.map((a) => (a.id === applicationId ? { ...a, status: prevApp.status } : a))
+        );
+      }
+    });
+  }
+
+  // Delete handler
+  async function handleDeleteConfirm() {
+    if (!deletingApplication) return;
+    const res = await fetch(`/api/applications/${deletingApplication.id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setLocalApplications((prev) => prev.filter((a) => a.id !== deletingApplication.id));
+      setDeleteDialogOpen(false);
+      setDeletingApplication(null);
+    }
+  }
+
+  // Edit success handler
+  function handleEditSuccess() {
+    setEditDialogOpen(false);
+    setEditingApplication(null);
+    router.refresh();
+  }
+
   const filtered = useMemo(() => {
-    let result = applications;
+    let result = localApplications;
     if (status) {
       result = result.filter((a) => a.status === (status as ApplicationStatus));
     }
@@ -108,22 +204,22 @@ export function ApplicationsContent({
       );
     }
     return result;
-  }, [applications, status, search]);
+  }, [localApplications, status, search]);
 
   const statusCounts = useMemo(() => {
     const counts: Partial<Record<ApplicationStatus, number>> = {};
-    for (const app of applications) {
+    for (const app of localApplications) {
       counts[app.status] = (counts[app.status] ?? 0) + 1;
     }
     return counts;
-  }, [applications]);
+  }, [localApplications]);
 
   const upcomingInterviews = useMemo(() => {
     const now = new Date();
-    return applications.filter(
+    return localApplications.filter(
       (a) => a.interview_date && new Date(a.interview_date) >= now
     ).length;
-  }, [applications]);
+  }, [localApplications]);
 
   if (!gmailConnected) {
     return <DashboardActions gmailConnected={false} />;
@@ -162,9 +258,40 @@ export function ApplicationsContent({
         <DashboardActions gmailConnected={true} />
       </div>
       {view === "kanban"
-        ? <KanbanBoard applications={filtered} />
-        : <ApplicationTable applications={filtered} />
+        ? <KanbanBoard applications={filtered} onStatusChange={handleDragStatusChange} onContextMenu={handleContextMenu} />
+        : <ApplicationTable applications={filtered} onContextMenu={handleContextMenu} />
       }
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            { label: "Edit", icon: <Pencil size={14} />, onClick: handleEditFromMenu },
+            { label: "Delete", icon: <Trash2 size={14} />, onClick: handleDeleteFromMenu, danger: true },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* Edit dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
+        {editingApplication && (
+          <ApplicationForm application={editingApplication} onSuccess={handleEditSuccess} />
+        )}
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        application={deletingApplication}
+        onConfirm={handleDeleteConfirm}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setDeletingApplication(null);
+        }}
+      />
     </div>
   );
 }

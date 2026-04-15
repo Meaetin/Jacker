@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 interface DialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   children: React.ReactNode;
   open?: boolean;
   onClose?: () => void;
@@ -21,9 +21,11 @@ export function Dialog({
 
   return (
     <>
-      <div onClick={() => !controlledOpen && setInternalOpen(true)}>
-        {trigger}
-      </div>
+      {trigger && (
+        <div onClick={() => !controlledOpen && setInternalOpen(true)}>
+          {trigger}
+        </div>
+      )}
       <AnimatePresence>
         {isOpen && (
           <motion.div

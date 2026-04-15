@@ -211,4 +211,89 @@
   .table-data-row:hover {
     background-color: var(--color-brand-light);
   }
+
+  /* Context menu */
+  .context-menu {
+    position: fixed;
+    z-index: 100;
+    min-width: 160px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.625rem;
+    box-shadow: 0 4px 16px rgba(42, 33, 24, 0.12), 0 1px 3px rgba(42, 33, 24, 0.06);
+    padding: 0.25rem;
+    overflow: hidden;
+  }
+
+  .context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    background: none;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s ease;
+  }
+
+  .context-menu-item:hover {
+    background-color: var(--color-surface-raised);
+  }
+
+  .context-menu-item-danger {
+    color: var(--color-status-rejected);
+  }
+
+  .context-menu-item-danger:hover {
+    background-color: #f8eded;
+  }
+
+  /* Drag states */
+  .kanban-card-dragging {
+    opacity: 0.4;
+  }
+
+  .kanban-card-overlay {
+    box-shadow: 0 12px 28px rgba(42, 33, 24, 0.18), 0 2px 6px rgba(42, 33, 24, 0.08);
+    transform: rotate(2deg);
+    cursor: grabbing;
+  }
+
+  .kanban-column-drop-target {
+    background-color: var(--color-brand-light);
+    border-color: var(--color-brand);
+  }
+
+  /* Danger button */
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    background-color: var(--color-status-rejected);
+    border: none;
+    border-radius: 0.625rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-danger:hover {
+    background-color: #b06060;
+    box-shadow: 0 2px 8px rgba(196, 112, 112, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .btn-danger:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
 }

@@ -11,9 +11,10 @@ import { Textarea } from "./ui/textarea";
 
 interface ApplicationFormProps {
   application: Application;
+  onSuccess?: () => void;
 }
 
-export function ApplicationForm({ application }: ApplicationFormProps) {
+export function ApplicationForm({ application, onSuccess }: ApplicationFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     company: application.company ?? "",
@@ -38,7 +39,11 @@ export function ApplicationForm({ application }: ApplicationFormProps) {
       });
 
       if (res.ok) {
-        router.push(`/dashboard/${application.id}`);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push(`/dashboard/${application.id}`);
+        }
       }
     } finally {
       setSaving(false);

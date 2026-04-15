@@ -10,6 +10,7 @@ type SortKey = "company" | "role" | "status" | "application_updated_at";
 
 interface ApplicationTableProps {
   applications: Application[];
+  onContextMenu?: (e: React.MouseEvent, applicationId: string) => void;
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
@@ -17,7 +18,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   return <span className="sort-icon ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
 }
 
-export function ApplicationTable({ applications }: ApplicationTableProps) {
+export function ApplicationTable({ applications, onContextMenu }: ApplicationTableProps) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("application_updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -87,6 +88,10 @@ export function ApplicationTable({ applications }: ApplicationTableProps) {
             <tr
               key={app.id}
               onClick={() => router.push(`/dashboard/${app.id}`)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu?.(e, app.id);
+              }}
               className="table-data-row cursor-pointer border-b border-border transition-colors"
             >
               <td className="table-data-cell py-3 pr-4">
