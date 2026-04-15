@@ -269,6 +269,16 @@
     border-color: var(--color-brand);
   }
 
+  /* History item hover — component layer */
+  .history-item-inactive:hover {
+    background-color: var(--color-surface-raised);
+  }
+
+  /* Mode toggle inactive hover — component layer */
+  .mode-toggle-inactive:hover {
+    background-color: var(--color-surface-overlay);
+  }
+
   /* Danger button */
   .btn-danger {
     display: inline-flex;
@@ -295,5 +305,42 @@
   .btn-danger:active {
     transform: translateY(0);
     box-shadow: none;
+  }
+
+  /* Chat message bubbles */
+  .chat-message-user .chat-message-bubble {
+    background-color: var(--color-brand-light);
+    border: 1px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
+    color: var(--color-text-primary);
+    border-radius: 1rem 1rem 0.25rem 1rem;
+  }
+
+  .chat-message-assistant .chat-message-bubble {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    border-radius: 1rem 1rem 1rem 0.25rem;
+  }
+
+  /* Chat suggestion buttons hover */
+  .chat-suggestion-button:hover {
+    background-color: var(--color-surface-raised);
+    border-color: var(--color-border-focus);
+  }
+
+  /* Chat input focus ring */
+  .chat-input-textarea:focus {
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-brand-light);
+    outline: none;
+  }
+
+  /* Chat analysis selector */
+  .analysis-selector-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a6e62' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
   }
 }

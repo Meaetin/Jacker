@@ -5,7 +5,7 @@ import { parseJobEmail } from "@/lib/parser/parse-email";
 import { logParseResult } from "@/lib/parser/parse-log";
 import { storeIfNew } from "@/lib/ingest/store-raw-email";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
-import { insertUserUsage } from "@/lib/db/user-usage";
+import { trackUsage } from "@/lib/db/user-usage";
 import { createClient } from "@/utils/supabase/server";
 
 export interface IngestResult {
@@ -174,9 +174,9 @@ export async function runIngestPipeline(
 
   // Record OpenAI usage for this run
   if (emailsScanned > 0) {
-    await insertUserUsage({
+    await trackUsage({
+      action: "email_parse",
       user_id: userId,
-      action_type: "email_parse",
       input_tokens: totalInputTokens,
       output_tokens: totalOutputTokens,
       emails_retrieved: result.fetched,

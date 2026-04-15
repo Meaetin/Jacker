@@ -49,7 +49,7 @@ export function Dialog({
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="dialog-close ml-auto block text-text-secondary hover:text-text-primary transition-colors"
+                className="dialog-close cursor-pointer ml-auto block text-text-secondary hover:text-text-primary transition-colors"
                 onClick={() => {
                   setInternalOpen(false);
                   onClose?.();

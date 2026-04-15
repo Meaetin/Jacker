@@ -59,6 +59,13 @@ export interface CandidateProfileRecord {
   updated_at: string;
 }
 
+export type DocumentType = "cover_letter" | "application_email";
+
+export interface GeneratedContent {
+  content_md: string;
+  document_type: DocumentType;
+}
+
 export interface JobFitAnalysis {
   id: string;
   user_id: string;

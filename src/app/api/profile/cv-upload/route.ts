@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { extractTextFromPdf } from "@/lib/profile/extract-pdf";
 import { generateProfileFromCvText } from "@/lib/profile/generate-profile";
 import { upsertCandidateProfile } from "@/lib/db/candidate-profile";
-import { insertUserUsage } from "@/lib/db/user-usage";
+import { trackUsage } from "@/lib/db/user-usage";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 500 });
     }
 
-    await insertUserUsage({
+    await trackUsage({
+      action: "cv_to_profile",
       user_id: user.id,
-      action_type: "cv_to_profile",
       input_tokens: generated.inputTokens,
       output_tokens: generated.outputTokens,
     });

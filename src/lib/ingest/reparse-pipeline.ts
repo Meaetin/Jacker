@@ -1,7 +1,7 @@
 import { parseJobEmail } from "@/lib/parser/parse-email";
 import { logParseResult } from "@/lib/parser/parse-log";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
-import { insertUserUsage } from "@/lib/db/user-usage";
+import { trackUsage } from "@/lib/db/user-usage";
 import { createClient } from "@/utils/supabase/server";
 import type { RawEmail } from "@/types/email";
 
@@ -133,9 +133,9 @@ export async function runReparsePipeline(
   }
 
   if (result.parsed > 0) {
-    await insertUserUsage({
+    await trackUsage({
+      action: "reparse",
       user_id: userId,
-      action_type: "reparse",
       input_tokens: totalInputTokens,
       output_tokens: totalOutputTokens,
       emails_scanned: result.parsed,

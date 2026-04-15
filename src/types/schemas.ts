@@ -131,6 +131,34 @@ export const jobAnalysisRequestSchema = z.object({
   }
 });
 
+export const documentGenerationRequestSchema = z.object({
+  analysis_id: z.string().uuid(),
+  document_type: z.enum(["cover_letter", "application_email"]),
+  custom_instructions: z.string().trim().max(2000).optional(),
+});
+
+export const extractedDescriptionSchema = z.object({
+  company_overview: z.string().nullable(),
+  role_summary: z.string().nullable(),
+  responsibilities: z.string().nullable(),
+  requirements: z.string().nullable(),
+  nice_to_have: z.string().nullable(),
+  benefits: z.string().nullable(),
+  location_info: z.string().nullable(),
+  extracted_company_name: z.string().trim().max(200).nullable(),
+  extracted_job_title: z.string().trim().max(200).nullable(),
+});
+
+export const chatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(10000),
+});
+
+export const chatRequestSchema = z.object({
+  messages: z.array(chatMessageSchema).min(1).max(50),
+  analysis_id: z.string().uuid().optional(),
+});
+
 export const jobAnalysisResultSchema = z.object({
   company_name: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),
   job_title: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Target, LogOut } from "lucide-react";
+import { LayoutDashboard, FileText, Target, MessageSquare, LogOut } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/profile", label: "CV & Profile", icon: FileText },
   { href: "/dashboard/job-analysis", label: "Job Analysis", icon: Target },
+  { href: "/dashboard/chat", label: "Talk to AI", icon: MessageSquare },
 ];
 
 interface NavSidebarProps {

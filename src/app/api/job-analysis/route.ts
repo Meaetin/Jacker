@@ -5,7 +5,8 @@ import { analyzeJobFit } from "@/lib/profile/analyze-job-fit";
 import { getScoreBand } from "@/lib/profile/defaults";
 import { getJobFitAnalyses, insertJobFitAnalysis } from "@/lib/db/job-fit-analyses";
 import { scrapeJobPosting } from "@/lib/profile/scrape-job-posting";
-import { insertUserUsage } from "@/lib/db/user-usage";
+import { extractJobDescription } from "@/lib/profile/extract-job-description";
+import { trackUsage } from "@/lib/db/user-usage";
 import { jobAnalysisRequestSchema } from "@/types/schemas";
 
 export async function GET() {
@@ -80,6 +81,24 @@ export async function POST(request: Request) {
     );
   }
 
+  // Clean extraction step — best-effort, falls back to raw text
+  try {
+    const extracted = await extractJobDescription(jobDescription);
+    if (extracted.cleanedText.length >= 50) {
+      jobDescription = extracted.cleanedText;
+      companyName = companyName ?? extracted.companyName;
+      jobTitle = jobTitle ?? extracted.jobTitle;
+    }
+    await trackUsage({
+      action: "job_extraction",
+      user_id: user.id,
+      input_tokens: extracted.inputTokens,
+      output_tokens: extracted.outputTokens,
+    });
+  } catch {
+    // Extraction failed — proceed with raw text
+  }
+
   let result;
   try {
     result = await analyzeJobFit({
@@ -92,9 +111,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  await insertUserUsage({
+  await trackUsage({
+    action: "job_analysis",
     user_id: user.id,
-    action_type: "job_analysis",
     input_tokens: result.inputTokens,
     output_tokens: result.outputTokens,
   });
