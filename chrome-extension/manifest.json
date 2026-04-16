@@ -6,12 +6,13 @@
   "permissions": ["activeTab", "tabs", "scripting", "storage"],
   "host_permissions": [
     "http://localhost/*",
+    "https://jackerai.vercel.app/*",
     "http://*/*",
     "https://*/*"
   ],
   "content_scripts": [
     {
-      "matches": ["http://localhost/*"],
+      "matches": ["http://localhost/*", "https://jackerai.vercel.app/*"],
       "js": ["tracker-bridge.js"],
       "run_at": "document_idle"
     }

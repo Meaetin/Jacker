@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { GMAIL_REDIRECT_URI } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -12,9 +13,8 @@ export async function GET(request: NextRequest) {
   }
 
   const clientId = process.env.GMAIL_CLIENT_ID;
-  const redirectUri = process.env.GMAIL_REDIRECT_URI;
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     return NextResponse.redirect(
       new URL("/dashboard?error=gmail_not_configured", request.url)
     );
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: GMAIL_REDIRECT_URI,
     response_type: "code",
     scope: "https://www.googleapis.com/auth/gmail.readonly",
     access_type: "offline",

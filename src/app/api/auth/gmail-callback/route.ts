@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { createClient } from "@/utils/supabase/server";
+import { GMAIL_REDIRECT_URI } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET,
-    process.env.GMAIL_REDIRECT_URI
+    GMAIL_REDIRECT_URI
   );
 
   const { tokens } = await oauth2Client.getToken(code);

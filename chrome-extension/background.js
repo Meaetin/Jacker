@@ -1,6 +1,16 @@
-// Matches any localhost port running the job tracker
-const TRACKER_TAB_PATTERN = /^http:\/\/localhost:\d+\//;
-const TRACKER_TAB_DASHBOARD = /^http:\/\/localhost:\d+\/dashboard/;
+// Matches the job tracker running on localhost (dev) or jackerai.vercel.app (prod)
+const TRACKER_TAB_PATTERNS = [
+  /^http:\/\/localhost:\d+\//,
+  /^https:\/\/jackerai\.vercel\.app\//,
+];
+
+function isTrackerTab(url) {
+  return TRACKER_TAB_PATTERNS.some((p) => p.test(url));
+}
+
+function isDashboardTab(url) {
+  return isTrackerTab(url) && /\/dashboard/.test(url);
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "prefill") {
@@ -16,10 +26,10 @@ async function handlePrefill(text, url) {
 
   const allTabs = await chrome.tabs.query({});
 
-  // Prefer a tab already on the dashboard; fall back to any localhost tab
+  // Prefer a tab already on the dashboard; fall back to any tracker tab
   const trackerTab =
-    allTabs.find((t) => t.url && TRACKER_TAB_DASHBOARD.test(t.url)) ??
-    allTabs.find((t) => t.url && TRACKER_TAB_PATTERN.test(t.url));
+    allTabs.find((t) => t.url && isDashboardTab(t.url)) ??
+    allTabs.find((t) => t.url && isTrackerTab(t.url));
 
   let trackerTabId;
 
@@ -38,7 +48,7 @@ async function handlePrefill(text, url) {
   } else {
     return {
       ok: false,
-      error: "No Job Tracker tab found. Open http://localhost:3000/dashboard/job-analysis first.",
+      error: "No Job Tracker tab found. Open the Job Tracker dashboard first.",
     };
   }
 

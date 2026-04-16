@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { SITE_URL } from "@/lib/config";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -26,7 +27,7 @@ export async function signInWithGoogle() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/confirm`,
+      redirectTo: `${SITE_URL}/auth/confirm`,
     },
   });
 

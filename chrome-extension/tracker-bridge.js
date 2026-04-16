@@ -1,4 +1,4 @@
-// Runs on localhost:3000 pages — bridges background → React via CustomEvent
+// Runs on Job Tracker pages — bridges background → React via CustomEvent
 
 function dispatchPrefill(text, url) {
   window.dispatchEvent(
