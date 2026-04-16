@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getApplicationById, updateApplication, deleteApplication } from "@/lib/db/applications";
 import { editableFieldsSchema } from "@/types/schemas";
+import { isDemoUser } from "@/utils/demo";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -72,6 +73,13 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isDemoUser(user.email)) {
+    return NextResponse.json(
+      { error: "Deleting applications is disabled for demo accounts" },
+      { status: 403 },
+    );
   }
 
   const { error } = await deleteApplication(id, user.id);

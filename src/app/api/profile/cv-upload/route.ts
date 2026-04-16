@@ -4,6 +4,7 @@ import { extractTextFromPdf } from "@/lib/profile/extract-pdf";
 import { generateProfileFromCvText } from "@/lib/profile/generate-profile";
 import { upsertCandidateProfile } from "@/lib/db/candidate-profile";
 import { trackUsage } from "@/lib/db/user-usage";
+import { isDemoUser } from "@/utils/demo";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -16,6 +17,13 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (isDemoUser(user.email)) {
+      return NextResponse.json(
+        { error: "CV upload is disabled for demo accounts" },
+        { status: 403 },
+      );
     }
 
     const formData = await request.formData();

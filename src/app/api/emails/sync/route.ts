@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { runIngestPipeline } from "@/lib/ingest/pipeline";
+import { isDemoUser } from "@/utils/demo";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -10,6 +11,13 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isDemoUser(user.email)) {
+    return NextResponse.json(
+      { error: "Email sync is disabled for demo accounts" },
+      { status: 403 },
+    );
   }
 
   const { data: tokens } = await supabase

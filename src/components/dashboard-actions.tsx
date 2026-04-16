@@ -6,6 +6,7 @@ import { RefreshCw, LoaderCircle, X } from "lucide-react";
 
 interface DashboardActionsProps {
   gmailConnected: boolean;
+  isDemo?: boolean;
 }
 
 interface SyncResult {
@@ -27,7 +28,7 @@ interface ReparseResult {
   duration?: string;
 }
 
-export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
+export function DashboardActions({ gmailConnected, isDemo = false }: DashboardActionsProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [reparsing, setReparsing] = useState(false);
@@ -147,6 +148,10 @@ export function DashboardActions({ gmailConnected }: DashboardActionsProps) {
         </a>
       </div>
     );
+  }
+
+  if (isDemo) {
+    return null;
   }
 
   return (

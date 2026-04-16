@@ -15,10 +15,61 @@ interface ChatMessageData {
 interface ChatWorkspaceProps {
   profileReady: boolean;
   analyses: JobFitAnalysis[];
+  isDemo?: boolean;
 }
 
-export function ChatWorkspace({ profileReady, analyses }: ChatWorkspaceProps) {
-  const [messages, setMessages] = useState<ChatMessageData[]>([]);
+const DEMO_MESSAGES: ChatMessageData[] = [
+  {
+    role: "user",
+    content: "I have a Stripe backend engineer interview coming up. What should I focus on to prepare?",
+  },
+  {
+    role: "assistant",
+    content: `Great that you're thinking ahead for the Stripe interview. Based on your profile as a backend engineer with strong systems experience, here's what I'd prioritize:
+
+**1. API Design & System Thinking**
+Stripe cares deeply about clean, developer-friendly APIs. Review RESTful design principles, versioning strategies, and idempotency — they love asking about how you'd design an API that other developers consume. Think about error handling, pagination, and backward compatibility.
+
+**2. Concurrency & Distributed Systems**
+Expect questions about race conditions, idempotency keys, and handling failures in distributed systems. Your experience with platform migration is a great talking point — be ready to discuss how you handled data consistency during the transition.
+
+**3. Coding Proficiency**
+The 45-minute coding session will likely involve a practical problem, not just algorithmic puzzles. Practice implementing things like a rate limiter, a simple payment processing system, or a webhook delivery service. Focus on clean, readable code with good error handling.
+
+**Concrete action items:**
+- Review Stripe's engineering blog for design philosophy insights
+- Practice 2-3 system design problems involving payment or financial systems
+- Brush up on database transactions and isolation levels
+- Prepare a 2-minute walkthrough of your most relevant project that demonstrates API design or systems thinking`,
+  },
+  {
+    role: "user",
+    content: "I also have a Shopee backend intern offer. Should I prioritize that over my pending applications?",
+  },
+  {
+    role: "assistant",
+    content: `This is a good problem to have. Here's a framework for thinking through it:
+
+**In favor of accepting Shopee now:**
+- A confirmed offer is worth more than a potential one — bird in hand
+- Shopee's backend team in Singapore works on high-scale e-commerce systems, which builds strong foundational experience
+- An internship on your resume strengthens your full-time applications (Stripe, Meta, Databricks all value prior industry experience)
+
+**Reasons to keep your options open:**
+- The deadline is April 18, so you have a few days to push for updates from Stripe and Meta
+- If any of your interview-stage applications convert to offers, those may align better with your target roles (full-time backend engineer vs. internship)
+
+**My recommendation:**
+1. **Accept the Shopee offer but don't stop interviewing.** An internship isn't a lifelong commitment, and having one doesn't prevent you from pursuing full-time roles
+2. **Email your Stripe and Meta recruiters today** — let them know you have a competing offer with an April 18 deadline. This often accelerates their timeline
+3. **If Stripe or Meta comes through with a full-time offer** before your Shopee start date, you can politely decline or negotiate with Shopee
+
+The key insight: having an offer gives you leverage, not obligation. Use it to create urgency with your other prospects.`,
+  },
+];
+
+export function ChatWorkspace({ profileReady, analyses, isDemo = false }: ChatWorkspaceProps) {
+  const [messages, setMessages] = useState<ChatMessageData[]>(isDemo ? DEMO_MESSAGES : []);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
@@ -161,6 +212,11 @@ export function ChatWorkspace({ profileReady, analyses }: ChatWorkspaceProps) {
 
       {/* Input bar */}
       <div className="chat-input-bar border-t border-border p-3">
+        {isDemo ? (
+          <div className="chat-demo-notice rounded-lg bg-surface-raised border border-border px-4 py-3 text-sm text-text-secondary text-center">
+            Chat is view-only in demo mode. Sign in to send messages.
+          </div>
+        ) : (
         <div className="chat-input-wrapper flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -193,6 +249,7 @@ export function ChatWorkspace({ profileReady, analyses }: ChatWorkspaceProps) {
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

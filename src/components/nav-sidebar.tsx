@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Target, MessageSquare, LogOut } from "lucide-react";
@@ -23,9 +24,10 @@ export function NavSidebar({ userEmail }: NavSidebarProps) {
       <div className="nav-sidebar-top p-4">
         <Link
           href="/"
-          className="nav-logo font-display text-xl font-bold text-brand"
+          className="nav-logo flex items-center gap-2"
         >
-          Jacker
+          <Image src="/logo.png" alt="Jacker" width={28} height={28} className="nav-logo-icon" />
+          <span className="font-display text-xl font-bold text-brand">Jacker</span>
         </Link>
         <ul className="nav-links mt-6 space-y-1">
           {NAV_ITEMS.map((item) => {

@@ -9,15 +9,16 @@ Convert CV text into:
 2) structured JSON profile data following this exact shape:
 {
   "candidate": {"full_name":"","email":"","phone":"","location":"","linkedin":"","portfolio_url":"","github":"","twitter":""},
-  "target_roles": {"primary": [""], "archetypes": [{"name":"", "level":"", "fit":"primary|secondary|adjacent"}]},
-  "narrative": {"headline":"", "exit_story":"", "superpowers": [""], "proof_points": [{"name":"", "url":"", "hero_metric":""}]},
-  "compensation": {"target_range":"", "currency":"USD", "minimum":"", "location_flexibility":""},
-  "location": {"country":"", "city":"", "timezone":"", "visa_status":""}
+  "narrative": {"headline":"", "exit_story":"", "superpowers": [""], "proof_points": [{"name":"", "url":"", "hero_metric":""}]}
 }
 
 Rules:
 - Return JSON object only.
 - Keep facts grounded in the CV text. If unknown, use empty string or empty array.
+- headline: one-line professional summary of the candidate.
+- exit_story: what makes this candidate distinctive — written in first person if possible.
+- superpowers: 3-5 concrete skills or traits.
+- proof_points: notable projects or achievements with a measurable metric.
 - Use concise markdown formatting for CV sections.
 - Do not invent confidential details.
 - Use valid UTF-8 text.

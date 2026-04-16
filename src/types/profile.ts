@@ -1,11 +1,5 @@
 export type FitBand = "strong_fit" | "moderate_fit" | "weak_fit";
 
-export interface RoleArchetype {
-  name: string;
-  level: string;
-  fit: "primary" | "secondary" | "adjacent";
-}
-
 export interface ProofPoint {
   name: string;
   url: string;
@@ -23,27 +17,11 @@ export interface CandidateProfileData {
     github: string;
     twitter: string;
   };
-  target_roles: {
-    primary: string[];
-    archetypes: RoleArchetype[];
-  };
   narrative: {
     headline: string;
     exit_story: string;
     superpowers: string[];
     proof_points: ProofPoint[];
-  };
-  compensation: {
-    target_range: string;
-    currency: string;
-    minimum: string;
-    location_flexibility: string;
-  };
-  location: {
-    country: string;
-    city: string;
-    timezone: string;
-    visa_status: string;
   };
 }
 

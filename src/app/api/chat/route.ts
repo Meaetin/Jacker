@@ -5,6 +5,7 @@ import { openai } from "@/lib/parser/openai-client";
 import { trackUsage } from "@/lib/db/user-usage";
 import { chatRequestSchema } from "@/types/schemas";
 import { checkRateLimit, acquireSlot, releaseSlot } from "@/lib/rate-limiter";
+import { isDemoUser } from "@/utils/demo";
 
 const CHAT_SYSTEM_PROMPT = `You are an expert career assistant helping a candidate think through their job search.
 
@@ -34,6 +35,13 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isDemoUser(user.email)) {
+    return NextResponse.json(
+      { error: "Chat is disabled for demo accounts" },
+      { status: 403 },
+    );
   }
 
   // Concurrent request guard — one active stream per user

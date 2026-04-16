@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getCandidateProfile, updateCandidateProfile, upsertCandidateProfile } from "@/lib/db/candidate-profile";
 import { candidateProfileUpdateSchema } from "@/types/schemas";
+import { isDemoUser } from "@/utils/demo";
 
 export async function GET() {
   const supabase = await createClient();
@@ -25,6 +26,13 @@ export async function PATCH(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isDemoUser(user.email)) {
+    return NextResponse.json(
+      { error: "Profile editing is disabled for demo accounts" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json();

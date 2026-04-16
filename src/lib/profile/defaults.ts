@@ -11,27 +11,11 @@ export const DEFAULT_PROFILE_DATA: CandidateProfileData = {
     github: "",
     twitter: "",
   },
-  target_roles: {
-    primary: [],
-    archetypes: [],
-  },
   narrative: {
     headline: "",
     exit_story: "",
     superpowers: [],
     proof_points: [],
-  },
-  compensation: {
-    target_range: "",
-    currency: "USD",
-    minimum: "",
-    location_flexibility: "",
-  },
-  location: {
-    country: "",
-    city: "",
-    timezone: "",
-    visa_status: "",
   },
 };
 
@@ -53,10 +37,7 @@ function normalizeStringArray(value: unknown): string[] {
 export function normalizeProfileData(input: unknown): CandidateProfileData {
   const source = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const candidate = (source.candidate as Record<string, unknown>) ?? {};
-  const targetRoles = (source.target_roles as Record<string, unknown>) ?? {};
   const narrative = (source.narrative as Record<string, unknown>) ?? {};
-  const compensation = (source.compensation as Record<string, unknown>) ?? {};
-  const location = (source.location as Record<string, unknown>) ?? {};
 
   return {
     candidate: {
@@ -68,18 +49,6 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
       portfolio_url: normalizeString(candidate.portfolio_url),
       github: normalizeString(candidate.github),
       twitter: normalizeString(candidate.twitter),
-    },
-    target_roles: {
-      primary: normalizeStringArray(targetRoles.primary),
-      archetypes: Array.isArray(targetRoles.archetypes)
-        ? targetRoles.archetypes
-            .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
-            .map((item) => ({
-              name: normalizeString(item.name),
-              level: normalizeString(item.level),
-              fit: item.fit === "secondary" || item.fit === "adjacent" ? item.fit : "primary",
-            }))
-        : [],
     },
     narrative: {
       headline: normalizeString(narrative.headline),
@@ -94,18 +63,6 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
               hero_metric: normalizeString(item.hero_metric),
             }))
         : [],
-    },
-    compensation: {
-      target_range: normalizeString(compensation.target_range),
-      currency: normalizeString(compensation.currency) || "USD",
-      minimum: normalizeString(compensation.minimum),
-      location_flexibility: normalizeString(compensation.location_flexibility),
-    },
-    location: {
-      country: normalizeString(location.country),
-      city: normalizeString(location.city),
-      timezone: normalizeString(location.timezone),
-      visa_status: normalizeString(location.visa_status),
     },
   };
 }

@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { CandidateProfileData, CandidateProfileRecord, RoleArchetype, ProofPoint } from "@/types/profile";
+import type { CandidateProfileData, CandidateProfileRecord, ProofPoint } from "@/types/profile";
 import { DEFAULT_PROFILE_DATA } from "@/lib/profile/defaults";
 
 interface ProfileWorkspaceProps {
   initialProfile: CandidateProfileRecord | null;
+  isDemo?: boolean;
 }
 
 function splitLines(value: string): string[] {
@@ -18,76 +19,6 @@ function splitLines(value: string): string[] {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-function ArchetypeEditor({
-  archetypes,
-  onChange,
-}: {
-  archetypes: RoleArchetype[];
-  onChange: (value: RoleArchetype[]) => void;
-}) {
-  function addArchetype() {
-    onChange([...archetypes, { name: "", level: "", fit: "secondary" }]);
-  }
-
-  function updateArchetype(index: number, field: keyof RoleArchetype, value: string) {
-    const updated = [...archetypes];
-    updated[index] = { ...updated[index], [field]: value };
-    onChange(updated);
-  }
-
-  function removeArchetype(index: number) {
-    onChange(archetypes.filter((_, i) => i !== index));
-  }
-
-  return (
-    <div className="archetype-editor space-y-3">
-      {archetypes.map((archetype, i) => (
-        <div key={i} className="archetype-card flex items-start gap-2 rounded-lg border border-border bg-surface p-3">
-          <div className="archetype-fields flex-1 grid gap-2 sm:grid-cols-3">
-            <Input
-              label="Name"
-              value={archetype.name}
-              onChange={(e) => updateArchetype(i, "name", e.target.value)}
-              placeholder="Senior Backend Engineer"
-            />
-            <Input
-              label="Level"
-              value={archetype.level}
-              onChange={(e) => updateArchetype(i, "level", e.target.value)}
-              placeholder="Senior"
-            />
-            <div className="archetype-fit-field flex flex-col gap-1">
-              <label className="text-xs font-medium text-text-secondary">Fit</label>
-              <select
-                value={archetype.fit}
-                onChange={(e) => updateArchetype(i, "fit", e.target.value)}
-                className="input-field text-sm"
-              >
-                <option value="primary">Primary</option>
-                <option value="secondary">Secondary</option>
-                <option value="adjacent">Adjacent</option>
-              </select>
-            </div>
-          </div>
-          <button
-            onClick={() => removeArchetype(i)}
-            className="archetype-remove mt-5 flex-shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-status-rejected"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={addArchetype}
-        className="archetype-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
-      >
-        <Plus className="h-4 w-4" />
-        Add archetype
-      </button>
-    </div>
-  );
 }
 
 function ProofPointEditor({
@@ -154,13 +85,11 @@ function ProofPointEditor({
   );
 }
 
-export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
+export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWorkspaceProps) {
   const initialData = initialProfile?.profile_data ?? DEFAULT_PROFILE_DATA;
 
   const [cvMarkdown, setCvMarkdown] = useState(initialProfile?.cv_markdown ?? "");
   const [profileData, setProfileData] = useState<CandidateProfileData>(initialData);
-
-  const [primaryRolesText, setPrimaryRolesText] = useState(initialData.target_roles.primary.join("\n"));
   const [superpowersText, setSuperpowersText] = useState(initialData.narrative.superpowers.join("\n"));
 
   const [uploading, setUploading] = useState(false);
@@ -173,17 +102,13 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
 
   const isDirty = useMemo(() => {
     if (cvMarkdown !== initialCvMarkdown) return true;
-    if (primaryRolesText !== initialData.target_roles.primary.join("\n")) return true;
     if (superpowersText !== initialData.narrative.superpowers.join("\n")) return true;
     if (JSON.stringify(profileData.candidate) !== JSON.stringify(initialData.candidate)) return true;
-    if (JSON.stringify(profileData.target_roles.archetypes) !== JSON.stringify(initialData.target_roles.archetypes)) return true;
     if (JSON.stringify(profileData.narrative.proof_points) !== JSON.stringify(initialData.narrative.proof_points)) return true;
     if (profileData.narrative.headline !== initialData.narrative.headline) return true;
     if (profileData.narrative.exit_story !== initialData.narrative.exit_story) return true;
-    if (JSON.stringify(profileData.compensation) !== JSON.stringify(initialData.compensation)) return true;
-    if (JSON.stringify(profileData.location) !== JSON.stringify(initialData.location)) return true;
     return false;
-  }, [cvMarkdown, primaryRolesText, superpowersText, profileData, initialCvMarkdown, initialData]);
+  }, [cvMarkdown, superpowersText, profileData, initialCvMarkdown, initialData]);
 
   const lastUpdated = useMemo(() => {
     if (!initialProfile?.updated_at) return null;
@@ -204,20 +129,8 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
     updateProfile("candidate", { ...profileData.candidate, [field]: value });
   }
 
-  function updateCompensationField(field: keyof CandidateProfileData["compensation"], value: string) {
-    updateProfile("compensation", { ...profileData.compensation, [field]: value });
-  }
-
-  function updateLocationField(field: keyof CandidateProfileData["location"], value: string) {
-    updateProfile("location", { ...profileData.location, [field]: value });
-  }
-
   function updateNarrativeField(field: keyof Omit<CandidateProfileData["narrative"], "superpowers" | "proof_points">, value: string) {
     updateProfile("narrative", { ...profileData.narrative, [field]: value });
-  }
-
-  function updateArchetypes(archetypes: RoleArchetype[]) {
-    updateProfile("target_roles", { ...profileData.target_roles, archetypes });
   }
 
   function updateProofPoints(proofPoints: ProofPoint[]) {
@@ -253,7 +166,6 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
       const generated = data.profile as CandidateProfileRecord;
       setCvMarkdown(generated.cv_markdown ?? "");
       setProfileData(generated.profile_data);
-      setPrimaryRolesText(generated.profile_data.target_roles.primary.join("\n"));
       setSuperpowersText(generated.profile_data.narrative.superpowers.join("\n"));
       setSuccessMessage("CV uploaded and profile generated.");
     } catch {
@@ -270,10 +182,6 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
 
     const payload: CandidateProfileData = {
       ...profileData,
-      target_roles: {
-        ...profileData.target_roles,
-        primary: splitLines(primaryRolesText),
-      },
       narrative: {
         ...profileData.narrative,
         superpowers: splitLines(superpowersText),
@@ -310,15 +218,19 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
       <div className="profile-upload-section card space-y-4">
         <h1 className="profile-title font-display text-2xl font-bold text-text-primary">CV & Profile</h1>
         <p className="profile-description text-sm text-text-secondary">
-          Upload a PDF CV to auto-generate your markdown CV and profile draft. Then edit and save.
+          {isDemo
+            ? "This is a sample candidate profile for demonstration. Profile editing is disabled in demo mode."
+            : "Upload a PDF CV to auto-generate your markdown CV and profile draft. Then edit and save."}
         </p>
 
-        <form action={handleUpload} className="cv-upload-form space-y-3">
-          <Input id="cv" name="cv" type="file" accept="application/pdf" label="Upload CV (PDF)" />
-          <Button type="submit" disabled={uploading}>
-            {uploading ? "Uploading..." : "Upload and Generate"}
-          </Button>
-        </form>
+        {!isDemo && (
+          <form action={handleUpload} className="cv-upload-form space-y-3">
+            <Input id="cv" name="cv" type="file" accept="application/pdf" label="Upload CV (PDF)" />
+            <Button type="submit" disabled={uploading}>
+              {uploading ? "Uploading..." : "Upload and Generate"}
+            </Button>
+          </form>
+        )}
 
         {lastUpdated && <p className="text-xs text-text-muted">Last updated: {lastUpdated}</p>}
         {uploadError && <p className="text-sm text-status-rejected">{uploadError}</p>}
@@ -333,94 +245,70 @@ export function ProfileWorkspace({ initialProfile }: ProfileWorkspaceProps) {
           rows={18}
           value={cvMarkdown}
           onChange={(e) => setCvMarkdown(e.target.value)}
+          disabled={isDemo}
         />
       </div>
 
       <div className="candidate-info-section card space-y-4">
         <h2 className="font-display text-lg font-semibold text-text-primary">Candidate</h2>
         <div className="candidate-fields-grid grid gap-3 sm:grid-cols-2">
-          <Input label="Full name" value={profileData.candidate.full_name} onChange={(e) => updateCandidateField("full_name", e.target.value)} />
-          <Input label="Email" value={profileData.candidate.email} onChange={(e) => updateCandidateField("email", e.target.value)} />
-          <Input label="Phone" value={profileData.candidate.phone} onChange={(e) => updateCandidateField("phone", e.target.value)} />
-          <Input label="Location" value={profileData.candidate.location} onChange={(e) => updateCandidateField("location", e.target.value)} />
-          <Input label="LinkedIn" value={profileData.candidate.linkedin} onChange={(e) => updateCandidateField("linkedin", e.target.value)} />
-          <Input label="Portfolio" value={profileData.candidate.portfolio_url} onChange={(e) => updateCandidateField("portfolio_url", e.target.value)} />
-          <Input label="GitHub" value={profileData.candidate.github} onChange={(e) => updateCandidateField("github", e.target.value)} />
-          <Input label="Twitter/X" value={profileData.candidate.twitter} onChange={(e) => updateCandidateField("twitter", e.target.value)} />
-        </div>
-      </div>
-
-      <div className="target-roles-section card space-y-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Target Roles</h2>
-        <Textarea
-          label="Primary roles (one per line)"
-          rows={4}
-          value={primaryRolesText}
-          onChange={(e) => setPrimaryRolesText(e.target.value)}
-        />
-        <div className="archetypes-section">
-          <h3 className="text-sm font-medium text-text-secondary mb-2">Archetypes</h3>
-          <ArchetypeEditor
-            archetypes={profileData.target_roles.archetypes}
-            onChange={updateArchetypes}
-          />
+          <Input label="Full name" value={profileData.candidate.full_name} onChange={(e) => updateCandidateField("full_name", e.target.value)} disabled={isDemo} />
+          <Input label="Email" value={profileData.candidate.email} onChange={(e) => updateCandidateField("email", e.target.value)} disabled={isDemo} />
+          <Input label="Phone" value={profileData.candidate.phone} onChange={(e) => updateCandidateField("phone", e.target.value)} disabled={isDemo} />
+          <Input label="Location" value={profileData.candidate.location} onChange={(e) => updateCandidateField("location", e.target.value)} disabled={isDemo} />
+          <Input label="LinkedIn" value={profileData.candidate.linkedin} onChange={(e) => updateCandidateField("linkedin", e.target.value)} disabled={isDemo} />
+          <Input label="Portfolio" value={profileData.candidate.portfolio_url} onChange={(e) => updateCandidateField("portfolio_url", e.target.value)} disabled={isDemo} />
+          <Input label="GitHub" value={profileData.candidate.github} onChange={(e) => updateCandidateField("github", e.target.value)} disabled={isDemo} />
+          <Input label="Twitter/X" value={profileData.candidate.twitter} onChange={(e) => updateCandidateField("twitter", e.target.value)} disabled={isDemo} />
         </div>
       </div>
 
       <div className="narrative-section card space-y-4">
         <h2 className="font-display text-lg font-semibold text-text-primary">Narrative</h2>
-        <Input label="Headline" value={profileData.narrative.headline} onChange={(e) => updateNarrativeField("headline", e.target.value)} />
-        <Textarea label="Exit story" rows={3} value={profileData.narrative.exit_story} onChange={(e) => updateNarrativeField("exit_story", e.target.value)} />
-        <Textarea label="Superpowers (one per line)" rows={4} value={superpowersText} onChange={(e) => setSuperpowersText(e.target.value)} />
-        <div className="proof-points-section">
-          <h3 className="text-sm font-medium text-text-secondary mb-2">Proof Points</h3>
-          <ProofPointEditor
-            proofPoints={profileData.narrative.proof_points}
-            onChange={updateProofPoints}
-          />
-        </div>
-      </div>
-
-      <div className="compensation-section card space-y-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Compensation & Location</h2>
-        <div className="compensation-fields-grid grid gap-3 sm:grid-cols-2">
-          <Input label="Target range" value={profileData.compensation.target_range} onChange={(e) => updateCompensationField("target_range", e.target.value)} />
-          <Input label="Currency" value={profileData.compensation.currency} onChange={(e) => updateCompensationField("currency", e.target.value)} />
-          <Input label="Minimum" value={profileData.compensation.minimum} onChange={(e) => updateCompensationField("minimum", e.target.value)} />
-          <Input label="Flexibility" value={profileData.compensation.location_flexibility} onChange={(e) => updateCompensationField("location_flexibility", e.target.value)} />
-          <Input label="Country" value={profileData.location.country} onChange={(e) => updateLocationField("country", e.target.value)} />
-          <Input label="City" value={profileData.location.city} onChange={(e) => updateLocationField("city", e.target.value)} />
-          <Input label="Timezone" value={profileData.location.timezone} onChange={(e) => updateLocationField("timezone", e.target.value)} />
-          <Input label="Visa status" value={profileData.location.visa_status} onChange={(e) => updateLocationField("visa_status", e.target.value)} />
-        </div>
-      </div>
-
-      <div className="save-profile-actions flex items-center gap-3 pb-20">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save Profile"}
-        </Button>
-      </div>
-
-      <AnimatePresence>
-        {isDirty && !saving && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="sticky-save-bar fixed bottom-0 right-0 left-56 z-40 border-t border-border bg-surface px-6 py-3 shadow-soft-md"
-          >
-            <div className="flex items-center justify-between max-w-4xl mx-auto">
-              <span className="sticky-save-hint text-sm text-text-secondary">
-                Unsaved changes
-              </span>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Profile"}
-              </Button>
-            </div>
-          </motion.div>
+        <Input label="Headline" value={profileData.narrative.headline} onChange={(e) => updateNarrativeField("headline", e.target.value)} disabled={isDemo} />
+        <Textarea label="Exit story" rows={3} value={profileData.narrative.exit_story} onChange={(e) => updateNarrativeField("exit_story", e.target.value)} disabled={isDemo} />
+        <Textarea label="Superpowers (one per line)" rows={4} value={superpowersText} onChange={(e) => setSuperpowersText(e.target.value)} disabled={isDemo} />
+        {!isDemo && (
+          <div className="proof-points-section">
+            <h3 className="text-sm font-medium text-text-secondary mb-2">Proof Points</h3>
+            <ProofPointEditor
+              proofPoints={profileData.narrative.proof_points}
+              onChange={updateProofPoints}
+            />
+          </div>
         )}
-      </AnimatePresence>
+      </div>
+
+      {!isDemo && (
+        <div className="save-profile-actions flex items-center gap-3 pb-20">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Profile"}
+          </Button>
+        </div>
+      )}
+
+      {!isDemo && (
+        <AnimatePresence>
+          {isDirty && !saving && (
+            <motion.div
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="sticky-save-bar fixed bottom-0 right-0 left-56 z-40 border-t border-border bg-surface px-6 py-3 shadow-soft-md"
+            >
+              <div className="flex items-center justify-between max-w-4xl mx-auto">
+                <span className="sticky-save-hint text-sm text-text-secondary">
+                  Unsaved changes
+                </span>
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save Profile"}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }

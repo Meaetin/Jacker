@@ -13,9 +13,12 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Job Application Tracker",
+  title: "Jacker",
   description:
-    "Track your job applications with AI-powered email parsing",
+    "AI-powered job application tracking — Gmail parsing, kanban boards, job fit scoring, and more",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({

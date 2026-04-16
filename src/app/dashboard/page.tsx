@@ -19,6 +19,11 @@ interface DashboardPageProps {
   searchParams: Promise<SearchParams>;
 }
 
+async function getIsDemo(email: string | undefined): Promise<boolean> {
+  const { isDemoUser } = await import("@/utils/demo");
+  return isDemoUser(email);
+}
+
 function KanbanSkeleton() {
   return (
     <div className="kanban-skeleton flex gap-3 overflow-x-hidden">
@@ -63,6 +68,7 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
     data: { user },
   } = await supabase.auth.getUser();
   const userId = user!.id;
+  const isDemo = await getIsDemo(user?.email);
 
   const [{ data: tokens }, { data: applications }] = await Promise.all([
     supabase.from("user_tokens").select("user_id").eq("user_id", userId).maybeSingle(),
@@ -80,6 +86,7 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
     <ApplicationsContent
       applications={(applications ?? []) as Application[]}
       gmailConnected={gmailConnected}
+      isDemo={isDemo}
       initialView={initialView}
       initialStatus={params.status ?? ""}
       initialSearch={params.search ?? ""}

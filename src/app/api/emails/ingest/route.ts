@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { runIngestPipeline } from "@/lib/ingest/pipeline";
+import { isDemoUser } from "@/utils/demo";
 
 export async function POST() {
   const supabase = await createClient();
@@ -12,7 +13,7 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (user.email === process.env.DEMO_USER_EMAIL) {
+  if (isDemoUser(user.email)) {
     return NextResponse.json(
       { error: "Ingestion is disabled for demo accounts" },
       { status: 403 }

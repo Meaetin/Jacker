@@ -43,6 +43,7 @@ const STATUS_CHIP_CLASSES: Record<ApplicationStatus, string> = {
 interface ApplicationsContentProps {
   applications: Application[];
   gmailConnected: boolean;
+  isDemo?: boolean;
   initialView: "table" | "kanban";
   initialStatus: string;
   initialSearch: string;
@@ -51,6 +52,7 @@ interface ApplicationsContentProps {
 export function ApplicationsContent({
   applications,
   gmailConnected,
+  isDemo = false,
   initialView,
   initialStatus,
   initialSearch,
@@ -221,7 +223,7 @@ export function ApplicationsContent({
     ).length;
   }, [localApplications]);
 
-  if (!gmailConnected) {
+  if (!gmailConnected && !isDemo) {
     return <DashboardActions gmailConnected={false} />;
   }
 
@@ -255,7 +257,7 @@ export function ApplicationsContent({
             onSearchChange={handleSearchChange}
           />
         </div>
-        <DashboardActions gmailConnected={true} />
+        <DashboardActions gmailConnected={true} isDemo={isDemo} />
       </div>
       {view === "kanban"
         ? <KanbanBoard applications={filtered} onStatusChange={handleDragStatusChange} onContextMenu={handleContextMenu} />
@@ -269,7 +271,7 @@ export function ApplicationsContent({
           y={contextMenu.y}
           items={[
             { label: "Edit", icon: <Pencil size={14} />, onClick: handleEditFromMenu },
-            { label: "Delete", icon: <Trash2 size={14} />, onClick: handleDeleteFromMenu, danger: true },
+            ...(!isDemo ? [{ label: "Delete", icon: <Trash2 size={14} />, onClick: handleDeleteFromMenu, danger: true }] : []),
           ]}
           onClose={() => setContextMenu(null)}
         />
