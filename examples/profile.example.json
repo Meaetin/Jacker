@@ -1,0 +1,33 @@
+{
+  "candidate": {
+    "full_name": "Jordan Lee",
+    "email": "jordan@example.com",
+    "phone": "+61-400-000-000",
+    "location": "Melbourne, VIC, Australia",
+    "linkedin": "linkedin.com/in/jordanlee",
+    "portfolio_url": "https://jordanlee.dev",
+    "github": "github.com/jordanlee",
+    "twitter": ""
+  },
+  "narrative": {
+    "headline": "Frontend engineer who closes the gap between design and production",
+    "exit_story": "Spent 5 years in fintech and e-commerce making slow, brittle UIs fast and reliable. Looking to join a product team where craft and velocity both matter.",
+    "superpowers": [
+      "Turning legacy codebases into maintainable systems without breaking things",
+      "Performance optimisation — load time, bundle size, API latency",
+      "Building design systems that teams actually use"
+    ],
+    "proof_points": [
+      {
+        "name": "Paymint checkout rewrite",
+        "url": "",
+        "hero_metric": "60% faster load time, 22% conversion lift"
+      },
+      {
+        "name": "Openlog",
+        "url": "https://github.com/jordanlee/openlog",
+        "hero_metric": "800+ weekly npm downloads"
+      }
+    ]
+  }
+}

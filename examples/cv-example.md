@@ -1,48 +1,45 @@
-# CV -- Alex Chen
+# CV — Jordan Lee
 
-**Location:** Austin, TX
-**Email:** alex@example.com
-**LinkedIn:** linkedin.com/in/alexchen
-**Portfolio:** alexchen.dev
-**GitHub:** github.com/alexchen
+**Location:** Melbourne, VIC, Australia
+**Email:** jordan@example.com
+**LinkedIn:** linkedin.com/in/jordanlee
+**GitHub:** github.com/jordanlee
 
 ## Professional Summary
 
-Full-stack AI engineer with 6 years building production ML systems. Led the ML platform at a Series B fintech (2020-2024), scaling from 2 models to 15+ in production. Built real-time fraud detection (99.7% precision, $2M/year saved), recommendation engine (18% uplift), and an internal MLOps platform serving 4 engineering teams.
+Full-stack software engineer with 5 years building web products across fintech and e-commerce. Strong background in React, Node.js, and cloud infrastructure. Led the frontend platform rewrite at a Series A payments startup, reducing page load times by 60% and improving checkout conversion by 22%.
 
 ## Work Experience
 
-### TechFin Corp -- Austin, TX
-**Senior ML Engineer / ML Platform Lead**
-2020-2024
+### Paymint — Melbourne, VIC
+**Senior Frontend Engineer**
+2021–2024
 
-- Led ML platform team (3 engineers), built internal MLOps tooling: model registry, A/B testing framework, feature store
-- Designed real-time fraud detection pipeline: Kafka → feature computation → model inference → decision engine. 99.7% precision at 50ms p99
-- Built recommendation engine for lending products: collaborative filtering + LLM reranking. 18% conversion uplift
-- Reduced model deployment time from 2 weeks to 4 hours with CI/CD pipeline (GitHub Actions + SageMaker)
-- Established model monitoring: drift detection, performance dashboards (Grafana), automated retraining triggers
+- Led rewrite of legacy jQuery checkout flow to React — reduced average load time from 4.2s to 1.7s and lifted conversion 22%
+- Built internal design system used across 3 products (40+ components, full Storybook docs)
+- Owned frontend CI/CD pipeline (GitHub Actions + Vercel); reduced deploy time from 18 minutes to under 4
+- Mentored two junior engineers; introduced pair programming and structured code review process
 
-### DataStartup Inc -- Remote
-**ML Engineer**
-2018-2020
+### Cartly — Remote
+**Full-Stack Engineer**
+2019–2021
 
-- Built NLP pipeline for document classification (BERT fine-tuning, 94% accuracy on legal docs)
-- Implemented search ranking with learning-to-rank models
-- Set up experiment tracking with MLflow and model versioning
+- Built merchant dashboard (Next.js, Postgres) handling inventory, orders, and analytics for 300+ stores
+- Integrated Stripe and Afterpay payment gateways; wrote webhook handlers and reconciliation logic
+- Reduced API p95 latency from 800ms to 210ms by introducing Redis caching and query optimisation
 
 ## Projects
 
-- **FraudShield** (Open Source) -- Real-time fraud detection framework. Kafka Streams + feature store + model serving. 500+ GitHub stars
-- **LLM Eval Toolkit** (Open Source) -- Evaluation framework for LLM applications. Supports custom metrics, regression testing, CI integration
+- **Openlog** (Open Source) — Lightweight structured logging library for Node.js. 800+ weekly npm downloads
+- **Budgetly** (Side Project) — Personal finance tracker built with Next.js and Plaid API. Featured on Hacker News
 
 ## Education
 
-- MS Computer Science, UT Austin (2018)
-- BS Computer Science, UC Berkeley (2016)
+- B.Sc. Computer Science, University of Melbourne (2019)
 
 ## Skills
 
-- **ML/AI:** PyTorch, TensorFlow, scikit-learn, Hugging Face, LangChain
-- **MLOps:** SageMaker, MLflow, Kubeflow, Airflow, Feature Store
-- **Infra:** Kubernetes, Kafka, Redis, PostgreSQL, AWS
-- **Languages:** Python, Go, TypeScript, SQL
+- **Frontend:** React, Next.js, TypeScript, Tailwind CSS
+- **Backend:** Node.js, PostgreSQL, Redis, REST, GraphQL
+- **Infrastructure:** AWS (EC2, S3, Lambda), Vercel, Docker, GitHub Actions
+- **Other:** Stripe, Plaid, Figma, Storybook
