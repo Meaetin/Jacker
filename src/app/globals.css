@@ -94,6 +94,17 @@
     box-shadow: none;
   }
 
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary:disabled:hover {
+    background-color: var(--color-brand);
+    box-shadow: none;
+    transform: none;
+  }
+
   .btn-secondary {
     display: inline-flex;
     align-items: center;
@@ -267,6 +278,29 @@
   .kanban-column-drop-target {
     background-color: var(--color-brand-light);
     border-color: var(--color-brand);
+  }
+
+  .kanban-column-drag-handle {
+    color: var(--color-text-muted);
+    cursor: grab;
+    transition: color 0.15s ease;
+  }
+
+  .kanban-column-drag-handle:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .kanban-column-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .kanban-column-dragging {
+    opacity: 0.4;
+  }
+
+  .kanban-column-overlay {
+    box-shadow: 0 12px 28px rgba(42, 33, 24, 0.18), 0 2px 6px rgba(42, 33, 24, 0.08);
+    cursor: grabbing;
   }
 
   /* History item hover — component layer */
