@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import type { Application, ApplicationWithSource, ApplicationStatus } from "@/types/application";
 import { normalizeCompany } from "@/utils/normalize-company";
+import { sanitizeEmailHtml } from "@/lib/email/sanitize-email-html";
 
 interface ApplicationFilters {
   status?: ApplicationStatus;
@@ -15,13 +16,16 @@ export async function getApplications(
   filters: ApplicationFilters = {}
 ) {
   const supabase = await createClient();
-  const { status, company, search, page = 1, limit = 50 } = filters;
+  const { status, company, search, page = 1, limit = 20 } = filters;
 
   let query = supabase
     .from("applications")
-    .select("*, raw_emails!source_email_id(subject, snippet, from_email)", { count: "exact" })
+    .select("*", { count: "exact" })
     .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
+    // Deterministic total order so .range() windows never overlap or skip
+    // (id is the tiebreaker for equal/NULL application_updated_at).
+    .order("application_updated_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
 
   if (status) query = query.eq("status", status);
@@ -35,6 +39,44 @@ export async function getApplications(
   return query;
 }
 
+export interface ApplicationStats {
+  counts: Record<ApplicationStatus, number>;
+  upcomingInterviews: number;
+}
+
+export async function getApplicationStats(
+  userId: string
+): Promise<ApplicationStats> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("application_stats", {
+    p_user: userId,
+  });
+
+  const counts: Record<ApplicationStatus, number> = {
+    applied: 0,
+    interview: 0,
+    assessment: 0,
+    rejected: 0,
+    offer: 0,
+    unknown: 0,
+  };
+  let upcomingInterviews = 0;
+
+  if (!error && Array.isArray(data)) {
+    for (const row of data as {
+      status: ApplicationStatus;
+      count: number;
+      upcoming_interviews: number;
+    }[]) {
+      if (row.status in counts) counts[row.status] = Number(row.count);
+      upcomingInterviews = Number(row.upcoming_interviews) || upcomingInterviews;
+    }
+  }
+
+  return { counts, upcomingInterviews };
+}
+
 export async function getApplicationById(
   id: string,
   userId: string
@@ -43,7 +85,9 @@ export async function getApplicationById(
 
   const { data, error } = await supabase
     .from("applications")
-    .select("*, raw_emails!source_email_id(subject, snippet, from_email, gmail_message_id)")
+    .select(
+      "*, raw_emails!source_email_id(subject, snippet, from_email, gmail_message_id, body_html, body_text)"
+    )
     .eq("id", id)
     .eq("user_id", userId)
     .single();
@@ -55,6 +99,8 @@ export async function getApplicationById(
     snippet: string | null;
     from_email: string | null;
     gmail_message_id: string | null;
+    body_html: string | null;
+    body_text: string | null;
   } | null;
 
   return {
@@ -62,6 +108,8 @@ export async function getApplicationById(
     email_subject: email?.subject ?? null,
     email_snippet: email?.snippet ?? null,
     email_from: email?.from_email ?? null,
+    email_body_html: sanitizeEmailHtml(email?.body_html),
+    email_body_text: email?.body_text ?? null,
     gmail_message_id: email?.gmail_message_id ?? null,
   };
 }
