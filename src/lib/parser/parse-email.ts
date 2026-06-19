@@ -1,4 +1,5 @@
 import { openai } from "./openai-client";
+import { AI_MODELS } from "@/lib/ai/models";
 import { SYSTEM_PROMPT } from "./prompt";
 import { aiParseResultSchema } from "@/types/schemas";
 import type { AIParseResult } from "@/types/parse-result";
@@ -37,7 +38,7 @@ export async function parseJobEmail(email: EmailInput): Promise<{
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: AI_MODELS.emailParse,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userMessage },

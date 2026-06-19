@@ -1,4 +1,5 @@
 import { openai } from "@/lib/parser/openai-client";
+import { AI_MODELS } from "@/lib/ai/models";
 import { extractedDescriptionSchema } from "@/types/schemas";
 
 const EXTRACTION_PROMPT = `You extract structured job posting data from raw web page text.
@@ -39,7 +40,7 @@ export async function extractJobDescription(rawText: string): Promise<ExtractRes
     : rawText;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: AI_MODELS.jobExtraction,
     temperature: 0.1,
     response_format: { type: "json_object" },
     messages: [
