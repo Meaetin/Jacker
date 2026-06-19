@@ -7,9 +7,9 @@ import { LayoutDashboard, FileText, Target, MessageSquare, LogOut } from "lucide
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/profile", label: "CV & Profile", icon: FileText },
-  { href: "/dashboard/job-analysis", label: "Job Analysis", icon: Target },
-  { href: "/dashboard/chat", label: "Talk to AI", icon: MessageSquare },
+  { href: "/profile", label: "CV & Profile", icon: FileText },
+  { href: "/job-analysis", label: "Job Analysis", icon: Target },
+  { href: "/chat", label: "Talk to AI", icon: MessageSquare },
 ];
 
 interface NavSidebarProps {

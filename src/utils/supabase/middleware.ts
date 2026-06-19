@@ -33,15 +33,27 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes: redirect to /login if not authenticated
-  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
-  const isApiRoute =
-    request.nextUrl.pathname.startsWith("/api/") &&
-    !request.nextUrl.pathname.startsWith("/api/auth/");
+  const { pathname } = request.nextUrl;
 
-  if (!user && (isDashboard || isApiRoute)) {
+  // Authenticated app routes that require a signed-in user
+  const PROTECTED_PREFIXES = ["/dashboard", "/profile", "/job-analysis", "/chat"];
+  const isProtectedPage = PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+  const isApiRoute =
+    pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/");
+
+  // Not signed in → keep them out of protected pages and API routes
+  if (!user && (isProtectedPage || isApiRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Already signed in → skip the landing and login pages, go to the dashboard
+  if (user && (pathname === "/" || pathname === "/login")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
