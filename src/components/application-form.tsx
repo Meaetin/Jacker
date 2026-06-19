@@ -11,10 +11,11 @@ import { Textarea } from "./ui/textarea";
 
 interface ApplicationFormProps {
   application: Application;
-  onSuccess?: () => void;
+  onSuccess?: (updated: Application) => void;
+  onCancel?: () => void;
 }
 
-export function ApplicationForm({ application, onSuccess }: ApplicationFormProps) {
+export function ApplicationForm({ application, onSuccess, onCancel }: ApplicationFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     company: application.company ?? "",
@@ -26,10 +27,12 @@ export function ApplicationForm({ application, onSuccess }: ApplicationFormProps
     notes: application.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setError(null);
 
     try {
       const res = await fetch(`/api/applications/${application.id}`, {
@@ -39,12 +42,15 @@ export function ApplicationForm({ application, onSuccess }: ApplicationFormProps
       });
 
       if (res.ok) {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          router.push(`/dashboard/${application.id}`);
-        }
+        const updated = (await res.json()) as Application;
+        onSuccess?.(updated);
+        return;
       }
+
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Couldn't save changes. Please try again.");
+    } catch {
+      setError("Network error — check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -124,6 +130,15 @@ export function ApplicationForm({ application, onSuccess }: ApplicationFormProps
         />
       </div>
 
+      {error && (
+        <p
+          role="alert"
+          className="application-form-error rounded-lg border border-status-rejected/20 bg-red-50/60 px-3 py-2 text-sm text-status-rejected"
+        >
+          {error}
+        </p>
+      )}
+
       <div className="flex gap-3">
         <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save Changes"}
@@ -131,7 +146,7 @@ export function ApplicationForm({ application, onSuccess }: ApplicationFormProps
         <Button
           type="button"
           variant="secondary"
-          onClick={() => router.back()}
+          onClick={() => (onCancel ? onCancel() : router.back())}
         >
           Cancel
         </Button>

@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
   useDraggable,
-  useDroppable,
   useSensor,
   MouseSensor,
   TouchSensor,
@@ -14,18 +12,19 @@ import {
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import type { Application, ApplicationStatus } from "@/types/application";
 import { formatDate } from "@/utils/date";
-
-const COLUMN_ORDER: ApplicationStatus[] = [
-  "applied",
-  "assessment",
-  "interview",
-  "offer",
-  "rejected",
-  "unknown",
-];
 
 const COLUMN_LABELS: Record<ApplicationStatus, string> = {
   applied: "Applied",
@@ -54,6 +53,8 @@ const COUNT_CLASSES: Record<ApplicationStatus, string> = {
   unknown: "badge-status-unknown",
 };
 
+type DragType = "card" | "column";
+
 /** Pure card content — no DnD hooks, safe to render in DragOverlay */
 function KanbanCardContent({ application }: { application: Application }) {
   return (
@@ -76,14 +77,47 @@ function KanbanCardContent({ application }: { application: Application }) {
   );
 }
 
+/** Pure column header — reused by the live column, the SSR fallback, and the DragOverlay */
+function KanbanColumnHeader({
+  status,
+  count,
+  handleAttributes,
+  handleListeners,
+}: {
+  status: ApplicationStatus;
+  count: number;
+  handleAttributes?: DraggableAttributes;
+  handleListeners?: DraggableSyntheticListeners;
+}) {
+  return (
+    <div className="kanban-column-header flex items-center gap-2 px-3 py-2.5 border-b border-border">
+      <button
+        type="button"
+        className="kanban-column-drag-handle flex-shrink-0 touch-none"
+        aria-label={`Reorder ${COLUMN_LABELS[status]} column`}
+        {...handleAttributes}
+        {...handleListeners}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <span className="kanban-column-title flex-1 text-sm font-semibold text-text-primary">
+        {COLUMN_LABELS[status]}
+      </span>
+      <span className={`kanban-column-count badge ${COUNT_CLASSES[status]}`}>{count}</span>
+    </div>
+  );
+}
+
 interface KanbanCardProps {
   application: Application;
   onContextMenu: (e: React.MouseEvent, applicationId: string) => void;
+  onCardClick: (applicationId: string) => void;
 }
 
-function KanbanCard({ application, onContextMenu }: KanbanCardProps) {
+function KanbanCard({ application, onContextMenu, onCardClick }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: application.id,
+    data: { type: "card" satisfies DragType },
   });
 
   return (
@@ -91,12 +125,11 @@ function KanbanCard({ application, onContextMenu }: KanbanCardProps) {
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`kanban-card ${isDragging ? "kanban-card-dragging" : ""}`}
+      className={`kanban-card kanban-card-link cursor-pointer ${isDragging ? "kanban-card-dragging" : ""}`}
       onContextMenu={(e) => onContextMenu(e, application.id)}
+      onClick={() => onCardClick(application.id)}
     >
-      <Link href={`/dashboard/${application.id}`} className="kanban-card-link block">
-        <KanbanCardContent application={application} />
-      </Link>
+      <KanbanCardContent application={application} />
     </div>
   );
 }
@@ -104,31 +137,44 @@ function KanbanCard({ application, onContextMenu }: KanbanCardProps) {
 interface KanbanColumnProps {
   status: ApplicationStatus;
   applications: Application[];
+  activeType: DragType | null;
   onContextMenu: (e: React.MouseEvent, applicationId: string) => void;
+  onCardClick: (applicationId: string) => void;
 }
 
-function KanbanColumn({ status, applications, onContextMenu }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
+function KanbanColumn({ status, applications, activeType, onContextMenu, onCardClick }: KanbanColumnProps) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging, isOver } = useSortable({
+    id: status,
+    data: { type: "column" satisfies DragType },
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+  };
+
+  // `isOver` fires for both a card hovering and a column hovering during a
+  // reorder — only show the card drop-target glow during a card drag.
+  const showDropTarget = isOver && activeType === "card";
 
   return (
     <div
       ref={setNodeRef}
-      className={`kanban-column flex-shrink-0 w-64 flex flex-col rounded-lg border border-border border-t-2 bg-surface-raised ${COLUMN_ACCENT[status]} ${isOver ? "kanban-column-drop-target" : ""}`}
+      style={style}
+      className={`kanban-column flex-shrink-0 w-64 flex flex-col rounded-lg border border-border border-t-2 bg-surface-raised ${COLUMN_ACCENT[status]} ${showDropTarget ? "kanban-column-drop-target" : ""} ${isDragging ? "kanban-column-dragging" : ""}`}
     >
-      <div className="kanban-column-header flex items-center justify-between px-3 py-2.5 border-b border-border">
-        <span className="kanban-column-title text-sm font-semibold text-text-primary">
-          {COLUMN_LABELS[status]}
-        </span>
-        <span className={`kanban-column-count badge ${COUNT_CLASSES[status]}`}>
-          {applications.length}
-        </span>
-      </div>
+      <KanbanColumnHeader
+        status={status}
+        count={applications.length}
+        handleAttributes={attributes}
+        handleListeners={listeners}
+      />
       <div className="kanban-column-cards flex flex-col gap-2 p-2 overflow-y-auto max-h-[calc(100vh-14rem)]">
         {applications.length === 0 ? (
           <p className="kanban-empty-state text-xs text-text-muted text-center py-6">No applications</p>
         ) : (
           applications.map((app) => (
-            <KanbanCard key={app.id} application={app} onContextMenu={onContextMenu} />
+            <KanbanCard key={app.id} application={app} onContextMenu={onContextMenu} onCardClick={onCardClick} />
           ))
         )}
       </div>
@@ -137,11 +183,13 @@ function KanbanColumn({ status, applications, onContextMenu }: KanbanColumnProps
 }
 
 /** Static fallback rendered during SSR to avoid hydration mismatches from DnD hooks */
-function KanbanBoardStatic({ applications, onContextMenu }: {
+function KanbanBoardStatic({ columnOrder, applications, onContextMenu, onCardClick }: {
+  columnOrder: ApplicationStatus[];
   applications: Application[];
   onContextMenu: (e: React.MouseEvent, applicationId: string) => void;
+  onCardClick: (applicationId: string) => void;
 }) {
-  const grouped = COLUMN_ORDER.reduce<Record<ApplicationStatus, Application[]>>(
+  const grouped = columnOrder.reduce<Record<ApplicationStatus, Application[]>>(
     (acc, status) => {
       acc[status] = applications.filter((app) => app.status === status);
       return acc;
@@ -151,30 +199,26 @@ function KanbanBoardStatic({ applications, onContextMenu }: {
 
   return (
     <div className="kanban-board flex gap-3 overflow-x-auto pb-4 min-w-0">
-      {COLUMN_ORDER.map((status) => {
+      {columnOrder.map((status) => {
         const apps = grouped[status];
         return (
           <div
             key={status}
             className={`kanban-column flex-shrink-0 w-64 flex flex-col rounded-lg border border-border border-t-2 bg-surface-raised ${COLUMN_ACCENT[status]}`}
           >
-            <div className="kanban-column-header flex items-center justify-between px-3 py-2.5 border-b border-border">
-              <span className="kanban-column-title text-sm font-semibold text-text-primary">
-                {COLUMN_LABELS[status]}
-              </span>
-              <span className={`kanban-column-count badge ${COUNT_CLASSES[status]}`}>
-                {apps.length}
-              </span>
-            </div>
+            <KanbanColumnHeader status={status} count={apps.length} />
             <div className="kanban-column-cards flex flex-col gap-2 p-2 overflow-y-auto max-h-[calc(100vh-14rem)]">
               {apps.length === 0 ? (
                 <p className="kanban-empty-state text-xs text-text-muted text-center py-6">No applications</p>
               ) : (
                 apps.map((app) => (
-                  <div key={app.id} className="kanban-card" onContextMenu={(e) => onContextMenu(e, app.id)}>
-                    <Link href={`/dashboard/${app.id}`} className="kanban-card-link block">
-                      <KanbanCardContent application={app} />
-                    </Link>
+                  <div
+                    key={app.id}
+                    className="kanban-card kanban-card-link cursor-pointer"
+                    onContextMenu={(e) => onContextMenu(e, app.id)}
+                    onClick={() => onCardClick(app.id)}
+                  >
+                    <KanbanCardContent application={app} />
                   </div>
                 ))
               )}
@@ -188,13 +232,31 @@ function KanbanBoardStatic({ applications, onContextMenu }: {
 
 interface KanbanBoardProps {
   applications: Application[];
+  columnOrder: ApplicationStatus[];
+  onColumnOrderChange: (order: ApplicationStatus[]) => void;
   onStatusChange: (applicationId: string, newStatus: ApplicationStatus) => void;
   onContextMenu: (e: React.MouseEvent, applicationId: string) => void;
+  onCardClick: (applicationId: string) => void;
 }
 
-export function KanbanBoard({ applications, onStatusChange, onContextMenu }: KanbanBoardProps) {
+export function KanbanBoard({
+  applications,
+  columnOrder,
+  onColumnOrderChange,
+  onStatusChange,
+  onContextMenu,
+  onCardClick,
+}: KanbanBoardProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Suppress the click the browser fires after a drag completes, so dropping a
+  // card doesn't also open the detail modal.
+  const justDraggedRef = useRef(false);
+  function handleCardClick(id: string) {
+    if (justDraggedRef.current) return;
+    onCardClick(id);
+  }
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -202,11 +264,10 @@ export function KanbanBoard({ applications, onStatusChange, onContextMenu }: Kan
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeType, setActiveType] = useState<DragType | null>(null);
   const [overId, setOverId] = useState<ApplicationStatus | null>(null);
 
-  const activeApp = activeId ? applications.find((a) => a.id === activeId) : null;
-
-  const grouped = COLUMN_ORDER.reduce<Record<ApplicationStatus, Application[]>>(
+  const grouped = columnOrder.reduce<Record<ApplicationStatus, Application[]>>(
     (acc, status) => {
       acc[status] = applications.filter((app) => app.status === status);
       return acc;
@@ -214,17 +275,20 @@ export function KanbanBoard({ applications, onStatusChange, onContextMenu }: Kan
     {} as Record<ApplicationStatus, Application[]>
   );
 
-  /** During drag: remove active card from all columns, prepend to hovered column */
-  const displayGrouped = COLUMN_ORDER.reduce<Record<ApplicationStatus, Application[]>>(
+  const activeApp = activeType === "card" && activeId ? applications.find((a) => a.id === activeId) : null;
+  const activeColumn = activeType === "column" ? (activeId as ApplicationStatus | null) : null;
+
+  /** During a card drag: remove active card from all columns, prepend to hovered column */
+  const displayGrouped = columnOrder.reduce<Record<ApplicationStatus, Application[]>>(
     (acc, status) => {
       let col = grouped[status];
 
-      if (activeId) {
-        col = col.filter((a) => a.id !== activeId);
+      if (activeApp) {
+        col = col.filter((a) => a.id !== activeApp.id);
       }
 
       // Prepend to the top of the hovered column
-      if (activeId && overId === status && activeApp) {
+      if (activeApp && overId === status) {
         col = [activeApp, ...col];
       }
 
@@ -235,33 +299,63 @@ export function KanbanBoard({ applications, onStatusChange, onContextMenu }: Kan
   );
 
   function handleDragStart(event: DragStartEvent) {
+    const type = (event.active.data.current?.type as DragType | undefined) ?? "card";
+    setActiveType(type);
     setActiveId(event.active.id as string);
+    // Only card drags can land on a clickable card and open the modal.
+    if (type === "card") justDraggedRef.current = true;
   }
 
   function handleDragOver(event: DragOverEvent) {
+    // Column reordering is handled by the sortable strategy; don't drive the
+    // card drop-target preview from it.
+    if (event.active.data.current?.type === "column") return;
     const { over } = event;
     setOverId(over ? (over.id as ApplicationStatus) : null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    const applicationId = active.id as string;
-    const targetStatus = over?.id as ApplicationStatus | undefined;
+    const type = active.data.current?.type as DragType | undefined;
 
-    if (targetStatus) {
-      const app = applications.find((a) => a.id === applicationId);
-      if (app && app.status !== targetStatus) {
-        onStatusChange(applicationId, targetStatus);
+    if (type === "column") {
+      if (over && active.id !== over.id) {
+        const from = columnOrder.indexOf(active.id as ApplicationStatus);
+        const to = columnOrder.indexOf(over.id as ApplicationStatus);
+        if (from !== -1 && to !== -1) {
+          onColumnOrderChange(arrayMove(columnOrder, from, to));
+        }
+      }
+    } else {
+      const applicationId = active.id as string;
+      const targetStatus = over?.id as ApplicationStatus | undefined;
+      if (targetStatus) {
+        const app = applications.find((a) => a.id === applicationId);
+        if (app && app.status !== targetStatus) {
+          onStatusChange(applicationId, targetStatus);
+        }
       }
     }
 
     setActiveId(null);
+    setActiveType(null);
     setOverId(null);
+    // Reset after the trailing click event has been dispatched.
+    setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 0);
   }
 
   // Render static HTML on first pass to avoid hydration mismatch from DnD hooks
   if (!mounted) {
-    return <KanbanBoardStatic applications={applications} onContextMenu={onContextMenu} />;
+    return (
+      <KanbanBoardStatic
+        columnOrder={columnOrder}
+        applications={applications}
+        onContextMenu={onContextMenu}
+        onCardClick={onCardClick}
+      />
+    );
   }
 
   return (
@@ -271,21 +365,31 @@ export function KanbanBoard({ applications, onStatusChange, onContextMenu }: Kan
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="kanban-board flex gap-3 overflow-x-auto pb-4 min-w-0">
-        {COLUMN_ORDER.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            applications={displayGrouped[status]}
-            onContextMenu={onContextMenu}
-          />
-        ))}
-      </div>
+      <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+        <div className="kanban-board flex gap-3 overflow-x-auto pb-4 min-w-0">
+          {columnOrder.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              applications={displayGrouped[status]}
+              activeType={activeType}
+              onContextMenu={onContextMenu}
+              onCardClick={handleCardClick}
+            />
+          ))}
+        </div>
+      </SortableContext>
 
       <DragOverlay dropAnimation={null}>
-        {activeApp ? (
+        {activeType === "card" && activeApp ? (
           <div className="kanban-card kanban-card-overlay">
             <KanbanCardContent application={activeApp} />
+          </div>
+        ) : activeType === "column" && activeColumn ? (
+          <div
+            className={`kanban-column kanban-column-overlay w-64 flex flex-col rounded-lg border border-border border-t-2 bg-surface-raised ${COLUMN_ACCENT[activeColumn]}`}
+          >
+            <KanbanColumnHeader status={activeColumn} count={grouped[activeColumn].length} />
           </div>
         ) : null}
       </DragOverlay>

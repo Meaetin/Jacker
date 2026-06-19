@@ -121,7 +121,7 @@ export function DocumentGenerateDialog({
     .join(" @ ");
 
   return (
-    <Dialog open={open} onClose={resetAndClose}>
+    <Dialog open={open} onClose={resetAndClose} closeOnOverlayClick={false}>
       <div className="document-generate-dialog space-y-4">
         <h2 className="text-lg font-semibold text-text-primary font-display">
           Generate Document

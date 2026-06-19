@@ -2,8 +2,13 @@ import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
 import { ApplicationsContent } from "@/components/applications-content";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getApplications, getApplicationStats } from "@/lib/db/applications";
+import { getKanbanColumnOrder } from "@/lib/db/user-preferences";
 import { APPLICATION_STATUSES } from "@/types/application";
-import type { Application } from "@/types/application";
+import type { Application, ApplicationStatus } from "@/types/application";
+
+const PAGE_SIZE = 20;
+const KANBAN_LIMIT = 1000;
 
 interface SearchParams {
   status?: string;
@@ -70,26 +75,41 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
   const userId = user!.id;
   const isDemo = await getIsDemo(user?.email);
 
-  const [{ data: tokens }, { data: applications }] = await Promise.all([
-    supabase.from("user_tokens").select("user_id").eq("user_id", userId).maybeSingle(),
-    supabase
-      .from("applications")
-      .select()
-      .eq("user_id", userId)
-      .order("application_updated_at", { ascending: false, nullsFirst: false }),
+  const initialView = params.view === "kanban" ? "kanban" : "table";
+  const status = (APPLICATION_STATUSES as readonly string[]).includes(params.status ?? "")
+    ? (params.status as ApplicationStatus)
+    : undefined;
+  const search = params.search || undefined;
+
+  // Table view loads the first page (20); kanban needs the whole board.
+  const listFilters =
+    initialView === "kanban"
+      ? { search, page: 1, limit: KANBAN_LIMIT }
+      : { status, search, page: 1, limit: PAGE_SIZE };
+
+  const [{ data: tokens }, { data: applications, count }, stats, columnOrder] = await Promise.all([
+    supabase.from("user_tokens").select("user_id, last_sync_at").eq("user_id", userId).maybeSingle(),
+    getApplications(userId, listFilters),
+    getApplicationStats(userId),
+    getKanbanColumnOrder(userId),
   ]);
 
   const gmailConnected = !!tokens;
-  const initialView = params.view === "kanban" ? "kanban" : "table";
+  const lastSyncAt = tokens?.last_sync_at ?? null;
 
   return (
     <ApplicationsContent
       applications={(applications ?? []) as Application[]}
+      total={count ?? 0}
+      stats={stats}
+      userId={userId}
       gmailConnected={gmailConnected}
+      lastSyncAt={lastSyncAt}
       isDemo={isDemo}
       initialView={initialView}
       initialStatus={params.status ?? ""}
       initialSearch={params.search ?? ""}
+      initialColumnOrder={columnOrder}
     />
   );
 }

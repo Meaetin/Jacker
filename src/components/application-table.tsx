@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Application } from "@/types/application";
 import { StatusBadge } from "./status-badge";
 import { formatDate } from "@/utils/date";
@@ -11,6 +10,7 @@ type SortKey = "company" | "role" | "status" | "application_updated_at";
 interface ApplicationTableProps {
   applications: Application[];
   onContextMenu?: (e: React.MouseEvent, applicationId: string) => void;
+  onRowClick?: (applicationId: string) => void;
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
@@ -18,8 +18,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   return <span className="sort-icon ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
 }
 
-export function ApplicationTable({ applications, onContextMenu }: ApplicationTableProps) {
-  const router = useRouter();
+export function ApplicationTable({ applications, onContextMenu, onRowClick }: ApplicationTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("application_updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -87,7 +86,7 @@ export function ApplicationTable({ applications, onContextMenu }: ApplicationTab
           {sorted.map((app) => (
             <tr
               key={app.id}
-              onClick={() => router.push(`/dashboard/${app.id}`)}
+              onClick={() => onRowClick?.(app.id)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 onContextMenu?.(e, app.id);

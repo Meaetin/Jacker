@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronDown, Check } from "lucide-react";
 import type { ApplicationStatus } from "@/types/application";
 import { APPLICATION_STATUSES } from "@/types/application";
@@ -33,14 +32,18 @@ const NEXT_STAGES: Partial<Record<ApplicationStatus, ApplicationStatus[]>> = {
 interface StatusChangeProps {
   applicationId: string;
   currentStatus: ApplicationStatus;
+  onChanged?: (status: ApplicationStatus) => void;
 }
 
-export function StatusChange({ applicationId, currentStatus }: StatusChangeProps) {
-  const router = useRouter();
+export function StatusChange({ applicationId, currentStatus, onChanged }: StatusChangeProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(currentStatus);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setStatus(currentStatus);
+  }, [currentStatus]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -59,20 +62,27 @@ export function StatusChange({ applicationId, currentStatus }: StatusChangeProps
       setOpen(false);
       return;
     }
+    const prevStatus = status;
+    // Optimistic: reflect the change immediately, roll back on failure.
+    setStatus(newStatus);
+    onChanged?.(newStatus);
     setLoading(true);
+    setOpen(false);
     try {
       const res = await fetch(`/api/applications/${applicationId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) {
-        setStatus(newStatus);
-        router.refresh();
+      if (!res.ok) {
+        setStatus(prevStatus);
+        onChanged?.(prevStatus);
       }
+    } catch {
+      setStatus(prevStatus);
+      onChanged?.(prevStatus);
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   }
 

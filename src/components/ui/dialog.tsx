@@ -8,6 +8,8 @@ interface DialogProps {
   children: React.ReactNode;
   open?: boolean;
   onClose?: () => void;
+  contentClassName?: string;
+  closeOnOverlayClick?: boolean;
 }
 
 export function Dialog({
@@ -15,6 +17,8 @@ export function Dialog({
   children,
   open: controlledOpen,
   onClose,
+  contentClassName = "max-w-lg",
+  closeOnOverlayClick = true,
 }: DialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen ?? internalOpen;
@@ -36,12 +40,13 @@ export function Dialog({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={() => {
+              if (!closeOnOverlayClick) return;
               setInternalOpen(false);
               onClose?.();
             }}
           >
             <motion.div
-              className="dialog-content card max-w-lg w-full mx-4"
+              className={`dialog-content card w-full mx-4 ${contentClassName}`}
               initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
