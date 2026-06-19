@@ -8,6 +8,14 @@ import { isDemoUser } from "@/utils/demo";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
+// A valid PDF begins with the "%PDF-" header. The spec allows a small amount of
+// leading bytes before it, so we scan the start of the file rather than only
+// byte 0. This rejects files that merely claim a PDF mime type / extension.
+function hasPdfMagicBytes(buffer: Buffer): boolean {
+  const header = buffer.subarray(0, 1024).toString("latin1");
+  return header.includes("%PDF-");
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "CV file is required" }, { status: 400 });
     }
 
-    if (file.type !== "application/pdf") {
+    if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
       return NextResponse.json({ error: "Only PDF files are supported" }, { status: 400 });
     }
 
@@ -42,6 +50,14 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (!hasPdfMagicBytes(buffer)) {
+      return NextResponse.json(
+        { error: "File is not a valid PDF" },
+        { status: 400 },
+      );
+    }
+
     let cvText = "";
     try {
       cvText = await extractTextFromPdf(buffer);

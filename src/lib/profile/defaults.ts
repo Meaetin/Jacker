@@ -11,12 +11,22 @@ export const DEFAULT_PROFILE_DATA: CandidateProfileData = {
     github: "",
     twitter: "",
   },
-  narrative: {
-    headline: "",
-    exit_story: "",
-    superpowers: [],
-    proof_points: [],
+  personal_details: {
+    address: "",
+    city: "",
+    postal_code: "",
+    country: "",
+    citizenship: "",
+    work_authorization: "",
+    current_occupation: "",
+    notice_period: "",
+    willing_to_relocate: "",
+    date_of_birth: "",
+    gender: "",
   },
+  education: [],
+  work_experience: [],
+  ai_summary: "",
 };
 
 export function getScoreBand(score: number): FitBand {
@@ -29,15 +39,21 @@ function normalizeString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function normalizeStringArray(value: unknown): string[] {
+function normalizeBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function normalizeObjectArray(
+  value: unknown,
+): Record<string, unknown>[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+  return value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
 }
 
 export function normalizeProfileData(input: unknown): CandidateProfileData {
   const source = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const candidate = (source.candidate as Record<string, unknown>) ?? {};
-  const narrative = (source.narrative as Record<string, unknown>) ?? {};
+  const personalDetails = (source.personal_details as Record<string, unknown>) ?? {};
 
   return {
     candidate: {
@@ -50,19 +66,36 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
       github: normalizeString(candidate.github),
       twitter: normalizeString(candidate.twitter),
     },
-    narrative: {
-      headline: normalizeString(narrative.headline),
-      exit_story: normalizeString(narrative.exit_story),
-      superpowers: normalizeStringArray(narrative.superpowers),
-      proof_points: Array.isArray(narrative.proof_points)
-        ? narrative.proof_points
-            .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
-            .map((item) => ({
-              name: normalizeString(item.name),
-              url: normalizeString(item.url),
-              hero_metric: normalizeString(item.hero_metric),
-            }))
-        : [],
+    personal_details: {
+      address: normalizeString(personalDetails.address),
+      city: normalizeString(personalDetails.city),
+      postal_code: normalizeString(personalDetails.postal_code),
+      country: normalizeString(personalDetails.country),
+      citizenship: normalizeString(personalDetails.citizenship),
+      work_authorization: normalizeString(personalDetails.work_authorization),
+      current_occupation: normalizeString(personalDetails.current_occupation),
+      notice_period: normalizeString(personalDetails.notice_period),
+      willing_to_relocate: normalizeString(personalDetails.willing_to_relocate),
+      date_of_birth: normalizeString(personalDetails.date_of_birth),
+      gender: normalizeString(personalDetails.gender),
     },
+    education: normalizeObjectArray(source.education).map((item) => ({
+      institution: normalizeString(item.institution),
+      degree: normalizeString(item.degree),
+      field_of_study: normalizeString(item.field_of_study),
+      start_date: normalizeString(item.start_date),
+      end_date: normalizeString(item.end_date),
+      grade: normalizeString(item.grade),
+    })),
+    work_experience: normalizeObjectArray(source.work_experience).map((item) => ({
+      job_title: normalizeString(item.job_title),
+      company: normalizeString(item.company),
+      location: normalizeString(item.location),
+      start_date: normalizeString(item.start_date),
+      end_date: normalizeString(item.end_date),
+      is_current: normalizeBoolean(item.is_current),
+      description: normalizeString(item.description),
+    })),
+    ai_summary: normalizeString(source.ai_summary),
   };
 }

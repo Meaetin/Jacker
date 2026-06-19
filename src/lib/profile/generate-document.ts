@@ -1,21 +1,22 @@
 import type { CandidateProfileData, DocumentType } from "@/types/profile";
 import type OpenAI from "openai";
 import { openai } from "@/lib/parser/openai-client";
+import { AI_MODELS } from "@/lib/ai/models";
 
 const SYSTEM_PROMPTS: Record<DocumentType, string> = {
   cover_letter: `You write compelling, personalized cover letters.
 
 You will receive:
 - Candidate CV in markdown
-- Candidate profile data (narrative, superpowers, proof points, target roles)
+- Candidate profile data (AI summary, work experience, education, personal details)
 - Job description
-- Job fit analysis (score, strengths, gaps, recommendations)
+- Job fit analysis (score, matches, gaps, recommendations)
 
 Write a cover letter that:
 - Opens with a hook tied to the company or role
-- Weaves in 2-3 specific proof points from the candidate's experience
+- Cites 2-3 concrete achievements from the candidate's work experience and CV
 - Addresses gaps honestly but frames them as growth areas or learning opportunities
-- Uses the candidate's narrative voice and headline
+- Reflects the candidate's background and matches as captured in the AI summary
 - Is 3-4 paragraphs, professional but warm
 - Does NOT use generic filler phrases like "I am writing to express my interest"
 - Addresses the hiring manager if the company name is known
@@ -29,14 +30,14 @@ Return JSON only: { "content_md": "the cover letter in markdown" }`,
 
 You will receive:
 - Candidate CV in markdown
-- Candidate profile data (narrative, superpowers, proof points)
+- Candidate profile data (AI summary, work experience, education, personal details)
 - Job description
-- Job fit analysis (score, strengths)
+- Job fit analysis (score, matches)
 
 Write an application email that:
 - Has a clear, specific subject line (first line of output, prefixed with "Subject: ")
 - Opens with why this role specifically interests the candidate
-- Highlights 1-2 killer proof points with quantified results
+- Highlights 1-2 concrete achievements with quantified results from the candidate's work experience or CV
 - Is brief (150-250 words in the body)
 - Sounds human and confident, not corporate or robotic
 - Closes with a clear call to action (meeting, call, next steps)
@@ -55,7 +56,7 @@ interface GenerateDocumentInput {
   analysisResult: {
     score: number;
     band: string;
-    strengths_md: string;
+    matches_md: string;
     gaps_md: string;
     recommendations_md: string;
     overall_feedback_md: string;
@@ -95,7 +96,7 @@ export async function generateDocument(
   }
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: AI_MODELS.documentGeneration,
     temperature: 0.3,
     max_tokens: 3000,
     response_format: { type: "json_object" },

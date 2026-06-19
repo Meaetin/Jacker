@@ -9,7 +9,7 @@ interface InsertAnalysisInput {
   source_url: string | null;
   score: number;
   band: FitBand;
-  strengths_md: string;
+  matches_md: string;
   gaps_md: string;
   recommendations_md: string;
   overall_feedback_md: string;
@@ -20,15 +20,19 @@ export async function insertJobFitAnalysis(entry: InsertAnalysisInput) {
   return supabase.from("job_fit_analyses").insert(entry).select().single();
 }
 
-export async function getJobFitAnalyses(userId: string, limit = 20): Promise<JobFitAnalysis[]> {
+export async function getJobFitAnalyses(
+  userId: string,
+  { page = 1, limit = 9 }: { page?: number; limit?: number } = {},
+): Promise<{ analyses: JobFitAnalysis[]; total: number }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const from = (page - 1) * limit;
+  const { data, count, error } = await supabase
     .from("job_fit_analyses")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(from, from + limit - 1);
 
-  if (error || !data) return [];
-  return data as JobFitAnalysis[];
+  if (error || !data) return { analyses: [], total: 0 };
+  return { analyses: data as JobFitAnalysis[], total: count ?? 0 };
 }

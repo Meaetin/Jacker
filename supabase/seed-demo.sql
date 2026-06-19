@@ -39,36 +39,50 @@ Go, Python, PostgreSQL, Redis, Kafka, AWS, Docker, Kubernetes',
       'github', 'https://github.com/alexchen',
       'twitter', ''
     ),
-    'target_roles', jsonb_build_object(
-      'primary', jsonb_build_array('Backend Engineer', 'Software Engineer', 'Platform Engineer'),
-      'archetypes', jsonb_build_array(
-        jsonb_build_object('name', 'Senior Backend Engineer', 'level', 'Senior', 'fit', 'primary'),
-        jsonb_build_object('name', 'Platform Engineer', 'level', 'Mid-Senior', 'fit', 'secondary'),
-        jsonb_build_object('name', 'Site Reliability Engineer', 'level', 'Mid', 'fit', 'adjacent')
-      )
-    ),
-    'narrative', jsonb_build_object(
-      'headline', 'Backend engineer who builds systems that scale',
-      'exit_story', 'Looking for a role with more architectural ownership and impact on product-facing systems.',
-      'superpowers', jsonb_build_array('Distributed systems design', 'Performance optimization', 'Go and Python expertise', 'Event-driven architectures'),
-      'proof_points', jsonb_build_array(
-        jsonb_build_object('name', 'Led platform migration', 'url', '', 'hero_metric', '3x throughput improvement'),
-        jsonb_build_object('name', 'Real-time data pipeline', 'url', '', 'hero_metric', '2M events/day processed'),
-        jsonb_build_object('name', 'API latency reduction', 'url', '', 'hero_metric', '40% latency decrease')
-      )
-    ),
-    'compensation', jsonb_build_object(
-      'target_range', '8,000–10,000 SGD/month',
-      'currency', 'SGD',
-      'minimum', '7,500',
-      'location_flexibility', 'Open to hybrid or on-site in Singapore'
-    ),
-    'location', jsonb_build_object(
-      'country', 'Singapore',
+    'personal_details', jsonb_build_object(
+      'address', '12 Marina Boulevard',
       'city', 'Singapore',
-      'timezone', 'Asia/Singapore (UTC+8)',
-      'visa_status', 'Singapore Citizen'
-    )
+      'postal_code', '018982',
+      'country', 'Singapore',
+      'citizenship', 'Singaporean',
+      'work_authorization', 'Singapore Citizen',
+      'current_occupation', 'Backend Engineer',
+      'notice_period', '1 month',
+      'willing_to_relocate', 'Open to discussion',
+      'date_of_birth', '1997-08-14',
+      'gender', 'Male'
+    ),
+    'education', jsonb_build_array(
+      jsonb_build_object(
+        'institution', 'National University of Singapore',
+        'degree', 'B.Sc.',
+        'field_of_study', 'Computer Science',
+        'start_date', 'Aug 2017',
+        'end_date', 'Jun 2021',
+        'grade', 'First Class Honours'
+      )
+    ),
+    'work_experience', jsonb_build_array(
+      jsonb_build_object(
+        'job_title', 'Backend Engineer',
+        'company', 'StartupCo',
+        'location', 'Singapore',
+        'start_date', 'Jan 2023',
+        'end_date', '',
+        'is_current', true,
+        'description', 'Led migration of monolith to microservices, improving throughput 3x. Designed an event-driven architecture handling 50k events/min and mentored 3 junior engineers on Go best practices.'
+      ),
+      jsonb_build_object(
+        'job_title', 'Software Engineer',
+        'company', 'TechCorp',
+        'location', 'Singapore',
+        'start_date', 'Jul 2021',
+        'end_date', 'Dec 2022',
+        'is_current', false,
+        'description', 'Built a real-time data pipeline processing 2M events/day, reduced API latency by 40% through caching and query optimization, and implemented a CI/CD pipeline that cut deployment time by 60%.'
+      )
+    ),
+    'ai_summary', 'Alex Chen is a Singapore-based backend engineer with around four years of experience building scalable, distributed systems. At StartupCo they led a monolith-to-microservices migration that tripled throughput and designed an event-driven architecture handling 50k events per minute; earlier at TechCorp they built high-volume data pipelines and drove significant latency and deployment-time improvements. Core strengths include Go and Python, distributed systems design, performance optimization, and event-driven architectures across PostgreSQL, Redis, Kafka, AWS, Docker, and Kubernetes. They hold a First Class Honours B.Sc. in Computer Science from the National University of Singapore and are well suited to senior backend, platform, or reliability-focused engineering roles with strong architectural ownership.'
   ),
   'alex_chen_cv.pdf',
   'application/pdf',
@@ -115,7 +129,7 @@ INSERT INTO applications (id, user_id, company, role, status, status_confidence,
 -- Re-seeding: DELETE FROM job_fit_analyses WHERE user_id = 'd6b2c257-4664-422c-993f-6e9a2a5eb64e';
 
 -- Job fit analyses
-INSERT INTO job_fit_analyses (user_id, job_description, company_name, job_title, score, band, strengths_md, gaps_md, recommendations_md, overall_feedback_md, created_at) VALUES
+INSERT INTO job_fit_analyses (user_id, job_description, company_name, job_title, score, band, matches_md, gaps_md, recommendations_md, overall_feedback_md, created_at) VALUES
   (
     'd6b2c257-4664-422c-993f-6e9a2a5eb64e',
     'Stripe is hiring a Backend Engineer to join our Payments Processing team. You will design and build systems that handle millions of transactions reliably. Requirements: 2+ years experience in Go, Python, or Java; understanding of distributed systems; experience with PostgreSQL and Redis; strong debugging skills. Nice to have: payment processing experience, event-driven architecture, Kubernetes.',

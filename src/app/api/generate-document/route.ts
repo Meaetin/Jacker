@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       analysisResult: {
         score: analysis.score,
         band: analysis.band,
-        strengths_md: analysis.strengths_md,
+        matches_md: analysis.matches_md,
         gaps_md: analysis.gaps_md,
         recommendations_md: analysis.recommendations_md,
         overall_feedback_md: analysis.overall_feedback_md,

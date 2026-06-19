@@ -1,9 +1,22 @@
 export type FitBand = "strong_fit" | "moderate_fit" | "weak_fit";
 
-export interface ProofPoint {
-  name: string;
-  url: string;
-  hero_metric: string;
+export interface EducationEntry {
+  institution: string;
+  degree: string;
+  field_of_study: string;
+  start_date: string;
+  end_date: string;
+  grade: string;
+}
+
+export interface WorkExperienceEntry {
+  job_title: string;
+  company: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  description: string;
 }
 
 export interface CandidateProfileData {
@@ -17,12 +30,22 @@ export interface CandidateProfileData {
     github: string;
     twitter: string;
   };
-  narrative: {
-    headline: string;
-    exit_story: string;
-    superpowers: string[];
-    proof_points: ProofPoint[];
+  personal_details: {
+    address: string;
+    city: string;
+    postal_code: string;
+    country: string;
+    citizenship: string;
+    work_authorization: string;
+    current_occupation: string;
+    notice_period: string;
+    willing_to_relocate: string;
+    date_of_birth: string;
+    gender: string;
   };
+  education: EducationEntry[];
+  work_experience: WorkExperienceEntry[];
+  ai_summary: string;
 }
 
 export interface CandidateProfileRecord {
@@ -53,7 +76,7 @@ export interface JobFitAnalysis {
   source_url: string | null;
   score: number;
   band: FitBand;
-  strengths_md: string;
+  matches_md: string;
   gaps_md: string;
   recommendations_md: string;
   overall_feedback_md: string;

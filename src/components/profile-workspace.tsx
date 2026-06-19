@@ -1,12 +1,18 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2 } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { Plus, Trash2, LoaderCircle, Sparkles, FileText } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { CandidateProfileData, CandidateProfileRecord, ProofPoint } from "@/types/profile";
+import type {
+  CandidateProfileData,
+  CandidateProfileRecord,
+  EducationEntry,
+  WorkExperienceEntry,
+} from "@/types/profile";
 import { DEFAULT_PROFILE_DATA } from "@/lib/profile/defaults";
 
 interface ProfileWorkspaceProps {
@@ -14,112 +20,191 @@ interface ProfileWorkspaceProps {
   isDemo?: boolean;
 }
 
-function splitLines(value: string): string[] {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
+const EMPTY_EDUCATION: EducationEntry = {
+  institution: "",
+  degree: "",
+  field_of_study: "",
+  start_date: "",
+  end_date: "",
+  grade: "",
+};
 
-function ProofPointEditor({
-  proofPoints,
+const EMPTY_WORK_EXPERIENCE: WorkExperienceEntry = {
+  job_title: "",
+  company: "",
+  location: "",
+  start_date: "",
+  end_date: "",
+  is_current: false,
+  description: "",
+};
+
+const CV_ACCEPTED_MIME = "application/pdf";
+const CV_MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const RELOCATE_OPTIONS = [
+  { value: "", label: "Not specified" },
+  { value: "Yes", label: "Yes" },
+  { value: "No", label: "No" },
+  { value: "Open to discussion", label: "Open to discussion" },
+];
+
+function EducationEditor({
+  entries,
   onChange,
+  disabled,
 }: {
-  proofPoints: ProofPoint[];
-  onChange: (value: ProofPoint[]) => void;
+  entries: EducationEntry[];
+  onChange: (value: EducationEntry[]) => void;
+  disabled: boolean;
 }) {
-  function addProofPoint() {
-    onChange([...proofPoints, { name: "", url: "", hero_metric: "" }]);
-  }
-
-  function updateProofPoint(index: number, field: keyof ProofPoint, value: string) {
-    const updated = [...proofPoints];
+  function updateEntry(index: number, field: keyof EducationEntry, value: string) {
+    const updated = [...entries];
     updated[index] = { ...updated[index], [field]: value };
     onChange(updated);
   }
 
-  function removeProofPoint(index: number) {
-    onChange(proofPoints.filter((_, i) => i !== index));
+  return (
+    <div className="education-editor space-y-3">
+      {entries.map((entry, i) => (
+        <div key={i} className="education-entry-card rounded-lg border border-border bg-surface p-3 space-y-2">
+          <div className="education-entry-fields grid gap-2 sm:grid-cols-2">
+            <Input label="Institution" value={entry.institution} onChange={(e) => updateEntry(i, "institution", e.target.value)} placeholder="Stanford University" disabled={disabled} />
+            <Input label="Degree" value={entry.degree} onChange={(e) => updateEntry(i, "degree", e.target.value)} placeholder="BSc" disabled={disabled} />
+            <Input label="Field of study" value={entry.field_of_study} onChange={(e) => updateEntry(i, "field_of_study", e.target.value)} placeholder="Computer Science" disabled={disabled} />
+            <Input label="Grade" value={entry.grade} onChange={(e) => updateEntry(i, "grade", e.target.value)} placeholder="First Class / 3.9 GPA" disabled={disabled} />
+            <Input label="Start" value={entry.start_date} onChange={(e) => updateEntry(i, "start_date", e.target.value)} placeholder="Sep 2018" disabled={disabled} />
+            <Input label="End" value={entry.end_date} onChange={(e) => updateEntry(i, "end_date", e.target.value)} placeholder="Jun 2022" disabled={disabled} />
+          </div>
+          {!disabled && (
+            <button
+              onClick={() => onChange(entries.filter((_, idx) => idx !== i))}
+              className="education-entry-remove flex items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-status-rejected"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+      {!disabled && (
+        <button
+          onClick={() => onChange([...entries, { ...EMPTY_EDUCATION }])}
+          className="education-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add education
+        </button>
+      )}
+    </div>
+  );
+}
+
+function WorkExperienceEditor({
+  entries,
+  onChange,
+  disabled,
+}: {
+  entries: WorkExperienceEntry[];
+  onChange: (value: WorkExperienceEntry[]) => void;
+  disabled: boolean;
+}) {
+  function updateEntry(index: number, patch: Partial<WorkExperienceEntry>) {
+    const updated = [...entries];
+    updated[index] = { ...updated[index], ...patch };
+    onChange(updated);
   }
 
   return (
-    <div className="proof-point-editor space-y-3">
-      {proofPoints.map((point, i) => (
-        <div key={i} className="proof-point-card flex items-start gap-2 rounded-lg border border-border bg-surface p-3">
-          <div className="proof-point-fields flex-1 grid gap-2 sm:grid-cols-3">
+    <div className="work-experience-editor space-y-3">
+      {entries.map((entry, i) => (
+        <div key={i} className="work-experience-entry-card rounded-lg border border-border bg-surface p-3 space-y-2">
+          <div className="work-experience-entry-fields grid gap-2 sm:grid-cols-2">
+            <Input label="Job title" value={entry.job_title} onChange={(e) => updateEntry(i, { job_title: e.target.value })} placeholder="Senior Backend Engineer" disabled={disabled} />
+            <Input label="Company" value={entry.company} onChange={(e) => updateEntry(i, { company: e.target.value })} placeholder="Acme Inc." disabled={disabled} />
+            <Input label="Location" value={entry.location} onChange={(e) => updateEntry(i, { location: e.target.value })} placeholder="Singapore" disabled={disabled} />
+            <Input label="Start" value={entry.start_date} onChange={(e) => updateEntry(i, { start_date: e.target.value })} placeholder="Jan 2021" disabled={disabled} />
             <Input
-              label="Name"
-              value={point.name}
-              onChange={(e) => updateProofPoint(i, "name", e.target.value)}
-              placeholder="Led platform migration"
-            />
-            <Input
-              label="URL"
-              value={point.url}
-              onChange={(e) => updateProofPoint(i, "url", e.target.value)}
-              placeholder="https://..."
-            />
-            <Input
-              label="Metric"
-              value={point.hero_metric}
-              onChange={(e) => updateProofPoint(i, "hero_metric", e.target.value)}
-              placeholder="3x throughput improvement"
+              label="End"
+              value={entry.is_current ? "Present" : entry.end_date}
+              onChange={(e) => updateEntry(i, { end_date: e.target.value })}
+              placeholder="Dec 2023"
+              disabled={disabled || entry.is_current}
             />
           </div>
-          <button
-            onClick={() => removeProofPoint(i)}
-            className="proof-point-remove mt-5 flex-shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-status-rejected"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <label className="work-experience-current-toggle flex items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="work-experience-current-checkbox h-4 w-4 rounded border-border accent-brand"
+              checked={entry.is_current}
+              onChange={(e) => updateEntry(i, { is_current: e.target.checked, end_date: e.target.checked ? "" : entry.end_date })}
+              disabled={disabled}
+            />
+            I currently work here
+          </label>
+          <Textarea label="Description" rows={3} value={entry.description} onChange={(e) => updateEntry(i, { description: e.target.value })} placeholder="Key responsibilities and achievements" disabled={disabled} />
+          {!disabled && (
+            <button
+              onClick={() => onChange(entries.filter((_, idx) => idx !== i))}
+              className="work-experience-entry-remove flex items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-status-rejected"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </button>
+          )}
         </div>
       ))}
-      <button
-        onClick={addProofPoint}
-        className="proof-point-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
-      >
-        <Plus className="h-4 w-4" />
-        Add proof point
-      </button>
+      {!disabled && (
+        <button
+          onClick={() => onChange([...entries, { ...EMPTY_WORK_EXPERIENCE }])}
+          className="work-experience-add-button flex items-center gap-1.5 text-sm text-brand hover:text-brand-hover transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add work experience
+        </button>
+      )}
     </div>
   );
 }
 
 export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWorkspaceProps) {
   const initialData = initialProfile?.profile_data ?? DEFAULT_PROFILE_DATA;
+  const initialCvMarkdown = initialProfile?.cv_markdown ?? "";
 
-  const [cvMarkdown, setCvMarkdown] = useState(initialProfile?.cv_markdown ?? "");
+  const [cvMarkdown, setCvMarkdown] = useState(initialCvMarkdown);
   const [profileData, setProfileData] = useState<CandidateProfileData>(initialData);
-  const [superpowersText, setSuperpowersText] = useState(initialData.narrative.superpowers.join("\n"));
 
+  // Baseline reflecting what is persisted. Updated after every successful save
+  // or upload so the dirty check compares against the live saved state rather
+  // than the stale initial props (which never change after mount).
+  const [savedCvMarkdown, setSavedCvMarkdown] = useState(initialCvMarkdown);
+  const [savedProfileData, setSavedProfileData] = useState<CandidateProfileData>(initialData);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(initialProfile?.updated_at ?? null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const initialCvMarkdown = initialProfile?.cv_markdown ?? "";
-
   const isDirty = useMemo(() => {
-    if (cvMarkdown !== initialCvMarkdown) return true;
-    if (superpowersText !== initialData.narrative.superpowers.join("\n")) return true;
-    if (JSON.stringify(profileData.candidate) !== JSON.stringify(initialData.candidate)) return true;
-    if (JSON.stringify(profileData.narrative.proof_points) !== JSON.stringify(initialData.narrative.proof_points)) return true;
-    if (profileData.narrative.headline !== initialData.narrative.headline) return true;
-    if (profileData.narrative.exit_story !== initialData.narrative.exit_story) return true;
-    return false;
-  }, [cvMarkdown, superpowersText, profileData, initialCvMarkdown, initialData]);
+    if (cvMarkdown !== savedCvMarkdown) return true;
+    return JSON.stringify(profileData) !== JSON.stringify(savedProfileData);
+  }, [cvMarkdown, profileData, savedCvMarkdown, savedProfileData]);
 
   const lastUpdated = useMemo(() => {
-    if (!initialProfile?.updated_at) return null;
-    return new Date(initialProfile.updated_at).toLocaleString("en-GB", {
+    if (!updatedAt) return null;
+    return new Date(updatedAt).toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  }, [initialProfile?.updated_at]);
+  }, [updatedAt]);
 
   function updateProfile(path: keyof CandidateProfileData, value: CandidateProfileData[keyof CandidateProfileData]) {
     setProfileData((prev) => ({ ...prev, [path]: value }));
@@ -129,18 +214,49 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
     updateProfile("candidate", { ...profileData.candidate, [field]: value });
   }
 
-  function updateNarrativeField(field: keyof Omit<CandidateProfileData["narrative"], "superpowers" | "proof_points">, value: string) {
-    updateProfile("narrative", { ...profileData.narrative, [field]: value });
+  function updatePersonalField(field: keyof CandidateProfileData["personal_details"], value: string) {
+    updateProfile("personal_details", { ...profileData.personal_details, [field]: value });
   }
 
-  function updateProofPoints(proofPoints: ProofPoint[]) {
-    updateProfile("narrative", { ...profileData.narrative, proof_points: proofPoints });
+  function openFilePicker() {
+    fileInputRef.current?.click();
   }
 
-  async function handleUpload(formData: FormData) {
-    const file = formData.get("cv");
-    if (!(file instanceof File) || !file.name) {
-      setUploadError("Please select a PDF file.");
+  function resetFileInput() {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setUploadError(null);
+    setSuccessMessage(null);
+
+    if (!file) {
+      resetFileInput();
+      return;
+    }
+
+    const isPdf =
+      file.type === CV_ACCEPTED_MIME && file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setUploadError("Please choose a PDF file.");
+      resetFileInput();
+      return;
+    }
+
+    if (file.size === 0 || file.size > CV_MAX_FILE_SIZE) {
+      setUploadError("PDF must be between 1 byte and 5MB.");
+      resetFileInput();
+      return;
+    }
+
+    setSelectedFile(file);
+  }
+
+  async function handleUpload() {
+    if (!selectedFile) {
+      setUploadError("Please choose a PDF file.");
       return;
     }
 
@@ -148,9 +264,13 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
     setUploadError(null);
     setSuccessMessage(null);
 
+    // Clear stale data while the new CV is being processed
+    setCvMarkdown("");
+    setProfileData(DEFAULT_PROFILE_DATA);
+
     try {
       const payload = new FormData();
-      payload.append("cv", file);
+      payload.append("cv", selectedFile);
 
       const res = await fetch("/api/profile/cv-upload", {
         method: "POST",
@@ -164,14 +284,21 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
       }
 
       const generated = data.profile as CandidateProfileRecord;
-      setCvMarkdown(generated.cv_markdown ?? "");
+      const generatedMarkdown = generated.cv_markdown ?? "";
+      setCvMarkdown(generatedMarkdown);
       setProfileData(generated.profile_data);
-      setSuperpowersText(generated.profile_data.narrative.superpowers.join("\n"));
+      // Upload persists immediately, so move the saved baseline forward.
+      setSavedCvMarkdown(generatedMarkdown);
+      setSavedProfileData(generated.profile_data);
+      setUpdatedAt(generated.updated_at ?? null);
       setSuccessMessage("CV uploaded and profile generated.");
     } catch {
       setUploadError("Upload failed due to a network error.");
     } finally {
       setUploading(false);
+      // Reset the picker once processing finishes (success or failure) so the
+      // button returns to its disabled "Generate Profile" state.
+      resetFileInput();
     }
   }
 
@@ -180,21 +307,12 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
     setSaveError(null);
     setSuccessMessage(null);
 
-    const payload: CandidateProfileData = {
-      ...profileData,
-      narrative: {
-        ...profileData.narrative,
-        superpowers: splitLines(superpowersText),
-      },
-    };
-
     try {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cv_markdown: cvMarkdown,
-          profile_data: payload,
+          profile_data: profileData,
         }),
       });
 
@@ -204,12 +322,42 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
         return;
       }
 
-      setProfileData(data.profile.profile_data);
+      const saved = data.profile as CandidateProfileRecord;
+      setProfileData(saved.profile_data);
+      setSavedProfileData(saved.profile_data);
+      setUpdatedAt(saved.updated_at ?? null);
       setSuccessMessage("Profile saved.");
     } catch {
       setSaveError("Save failed due to a network error.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRegenerateSummary() {
+    setRegenerating(true);
+    setSaveError(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await fetch("/api/profile/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_data: profileData, cv_markdown: cvMarkdown }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSaveError(data.error || "Summary generation failed");
+        return;
+      }
+
+      setProfileData((prev) => ({ ...prev, ai_summary: data.ai_summary }));
+      setSuccessMessage("AI summary regenerated. Save to keep it.");
+    } catch {
+      setSaveError("Summary generation failed due to a network error.");
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -224,12 +372,58 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
         </p>
 
         {!isDemo && (
-          <form action={handleUpload} className="cv-upload-form space-y-3">
-            <Input id="cv" name="cv" type="file" accept="application/pdf" label="Upload CV (PDF)" />
-            <Button type="submit" disabled={uploading}>
-              {uploading ? "Uploading..." : "Upload and Generate"}
+          <div className="cv-upload-form space-y-3">
+            <div className="cv-file-field space-y-1.5">
+              <span className="cv-file-label text-sm font-medium text-text-primary">
+                Upload CV (PDF)
+              </span>
+              <input
+                ref={fileInputRef}
+                id="cv"
+                name="cv"
+                type="file"
+                accept="application/pdf,.pdf"
+                className="cv-file-input sr-only"
+                onChange={handleFileChange}
+                disabled={uploading}
+              />
+              {selectedFile ? (
+                <div className="cv-file-chosen flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+                  <FileText className="cv-file-icon h-4 w-4 shrink-0 text-brand" />
+                  <span className="cv-file-name truncate text-sm text-text-primary">
+                    {selectedFile.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    disabled={uploading}
+                    className="cv-file-rechoose ml-auto shrink-0 text-sm text-brand transition-colors hover:text-brand-hover disabled:opacity-50"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openFilePicker}
+                  disabled={uploading}
+                  className="cv-file-choose-button input-field flex w-full items-center text-left text-text-muted transition-colors hover:border-brand disabled:opacity-50"
+                >
+                  Choose File
+                </button>
+              )}
+            </div>
+            <Button type="button" onClick={handleUpload} disabled={uploading || !selectedFile}>
+              {uploading ? (
+                <span className="upload-button-loading flex items-center gap-2">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Generating…
+                </span>
+              ) : (
+                "Generate Profile"
+              )}
             </Button>
-          </form>
+          </div>
         )}
 
         {lastUpdated && <p className="text-xs text-text-muted">Last updated: {lastUpdated}</p>}
@@ -238,15 +432,22 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
         {successMessage && <p className="text-sm text-status-offer">{successMessage}</p>}
       </div>
 
-      <div className="cv-markdown-section card space-y-4">
-        <Textarea
-          id="cv_markdown"
-          label="CV Markdown"
-          rows={18}
-          value={cvMarkdown}
-          onChange={(e) => setCvMarkdown(e.target.value)}
-          disabled={isDemo}
-        />
+      <div className="cv-markdown-section card space-y-3">
+        <div className="cv-markdown-header space-y-1">
+          <h2 className="font-display text-lg font-semibold text-text-primary">CV Markdown</h2>
+          <p className="cv-markdown-hint text-sm text-text-secondary">
+            Generated from your uploaded resume. Upload a new CV to regenerate it.
+          </p>
+        </div>
+        {cvMarkdown ? (
+          <pre className="cv-markdown-content max-h-[32rem] overflow-auto rounded-lg border border-border bg-surface p-4 whitespace-pre-wrap break-words font-body text-sm leading-relaxed text-text-primary">
+            {cvMarkdown}
+          </pre>
+        ) : (
+          <p className="cv-markdown-empty rounded-lg border border-dashed border-border bg-surface p-4 text-sm text-text-muted">
+            No CV generated yet. Upload a PDF resume above to generate it.
+          </p>
+        )}
       </div>
 
       <div className="candidate-info-section card space-y-4">
@@ -263,20 +464,74 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
         </div>
       </div>
 
-      <div className="narrative-section card space-y-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Narrative</h2>
-        <Input label="Headline" value={profileData.narrative.headline} onChange={(e) => updateNarrativeField("headline", e.target.value)} disabled={isDemo} />
-        <Textarea label="Exit story" rows={3} value={profileData.narrative.exit_story} onChange={(e) => updateNarrativeField("exit_story", e.target.value)} disabled={isDemo} />
-        <Textarea label="Superpowers (one per line)" rows={4} value={superpowersText} onChange={(e) => setSuperpowersText(e.target.value)} disabled={isDemo} />
-        {!isDemo && (
-          <div className="proof-points-section">
-            <h3 className="text-sm font-medium text-text-secondary mb-2">Proof Points</h3>
-            <ProofPointEditor
-              proofPoints={profileData.narrative.proof_points}
-              onChange={updateProofPoints}
-            />
-          </div>
-        )}
+      <div className="personal-details-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Additional Details</h2>
+        <p className="personal-details-hint text-sm text-text-secondary">
+          Details that commonly appear on job application forms.
+        </p>
+        <div className="personal-details-grid grid gap-3 sm:grid-cols-2">
+          <Input label="Address" value={profileData.personal_details.address} onChange={(e) => updatePersonalField("address", e.target.value)} disabled={isDemo} />
+          <Input label="City" value={profileData.personal_details.city} onChange={(e) => updatePersonalField("city", e.target.value)} disabled={isDemo} />
+          <Input label="Postal code" value={profileData.personal_details.postal_code} onChange={(e) => updatePersonalField("postal_code", e.target.value)} disabled={isDemo} />
+          <Input label="Country" value={profileData.personal_details.country} onChange={(e) => updatePersonalField("country", e.target.value)} disabled={isDemo} />
+          <Input label="Citizenship" value={profileData.personal_details.citizenship} onChange={(e) => updatePersonalField("citizenship", e.target.value)} disabled={isDemo} />
+          <Input label="Work authorization" value={profileData.personal_details.work_authorization} onChange={(e) => updatePersonalField("work_authorization", e.target.value)} placeholder="Citizen / PR / Requires sponsorship" disabled={isDemo} />
+          <Input label="Current occupation" value={profileData.personal_details.current_occupation} onChange={(e) => updatePersonalField("current_occupation", e.target.value)} disabled={isDemo} />
+          <Input label="Notice period" value={profileData.personal_details.notice_period} onChange={(e) => updatePersonalField("notice_period", e.target.value)} placeholder="Immediate / 1 month" disabled={isDemo} />
+          <Select label="Willing to relocate" options={RELOCATE_OPTIONS} value={profileData.personal_details.willing_to_relocate} onChange={(e) => updatePersonalField("willing_to_relocate", e.target.value)} disabled={isDemo} />
+          <Input label="Date of birth" value={profileData.personal_details.date_of_birth} onChange={(e) => updatePersonalField("date_of_birth", e.target.value)} placeholder="1995-04-21" disabled={isDemo} />
+          <Input label="Gender" value={profileData.personal_details.gender} onChange={(e) => updatePersonalField("gender", e.target.value)} disabled={isDemo} />
+        </div>
+      </div>
+
+      <div className="education-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Education</h2>
+        <EducationEditor
+          entries={profileData.education}
+          onChange={(entries) => updateProfile("education", entries)}
+          disabled={isDemo}
+        />
+      </div>
+
+      <div className="work-experience-section card space-y-4">
+        <h2 className="font-display text-lg font-semibold text-text-primary">Work Experience</h2>
+        <WorkExperienceEditor
+          entries={profileData.work_experience}
+          onChange={(entries) => updateProfile("work_experience", entries)}
+          disabled={isDemo}
+        />
+      </div>
+
+      <div className="ai-summary-section card space-y-4">
+        <div className="ai-summary-header flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg font-semibold text-text-primary">AI Summary</h2>
+          {!isDemo && (
+            <Button variant="secondary" onClick={handleRegenerateSummary} disabled={regenerating || uploading}>
+              {regenerating ? (
+                <span className="ai-summary-regenerate-loading flex items-center gap-2">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Regenerating…
+                </span>
+              ) : (
+                <span className="ai-summary-regenerate flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Regenerate
+                </span>
+              )}
+            </Button>
+          )}
+        </div>
+        <p className="ai-summary-hint text-sm text-text-secondary">
+          A breakdown of what we know about you. Used to answer questions and tailor documents.
+        </p>
+        <Textarea
+          label="Summary"
+          rows={8}
+          value={profileData.ai_summary}
+          onChange={(e) => updateProfile("ai_summary", e.target.value)}
+          placeholder="Upload a CV or click Regenerate to generate a summary."
+          disabled={isDemo}
+        />
       </div>
 
       {!isDemo && (

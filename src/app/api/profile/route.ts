@@ -49,7 +49,6 @@ export async function PATCH(request: Request) {
 
   if (!existing) {
     const { data, error } = await upsertCandidateProfile(user.id, {
-      cv_markdown: parsed.data.cv_markdown,
       profile_data: parsed.data.profile_data,
     });
 

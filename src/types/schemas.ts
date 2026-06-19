@@ -40,14 +40,46 @@ export const aiParseResultSchema = z.object({
   notes: nullableString,
 });
 
+// Trim incoming text; treat empty/whitespace-only as "cleared" (null) so
+// nullable columns don't store "" and date columns don't get an invalid "".
+const trimToNull = (val: unknown) => {
+  if (typeof val !== "string") return val;
+  const trimmed = val.trim();
+  return trimmed === "" ? null : trimmed;
+};
+
+// Nullable text column: "" -> null, otherwise a trimmed string.
+const editableNullableText = z.preprocess(
+  trimToNull,
+  z.string().nullable().optional(),
+);
+
+// Required text (company/role): trim, must be non-empty when provided.
+const editableRequiredText = z.preprocess(
+  (val) => (typeof val === "string" ? val.trim() : val),
+  z.string().min(1).optional(),
+);
+
+// Postgres `date` column: accept only YYYY-MM-DD or null. Empty -> null.
+// Rejecting malformed dates here turns a would-be DB 500 into a clean 400.
+const editableDate = z.preprocess(
+  trimToNull,
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected date in YYYY-MM-DD format")
+    .refine((s) => !Number.isNaN(Date.parse(s)), "Invalid calendar date")
+    .nullable()
+    .optional(),
+);
+
 export const editableFieldsSchema = z.object({
-  company: z.string().min(1).optional(),
-  role: z.string().min(1).optional(),
+  company: editableRequiredText,
+  role: editableRequiredText,
   status: z.enum(APPLICATION_STATUSES).optional(),
-  interview_date: z.string().nullable().optional(),
-  interview_time: z.string().nullable().optional(),
-  location: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
+  interview_date: editableDate,
+  interview_time: editableNullableText,
+  location: editableNullableText,
+  notes: editableNullableText,
 });
 
 export const applicationFiltersSchema = z.object({
@@ -55,10 +87,10 @@ export const applicationFiltersSchema = z.object({
   company: z.string().optional(),
   search: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(50),
+  // Table view paginates at 20; kanban requests the whole board in one page.
+  limit: z.coerce.number().min(1).max(1000).default(20),
 });
 
-const nonEmptyString = z.string().trim().min(1);
 const optionalString = z.string().trim().optional().default("");
 
 export const candidateProfileDataSchema = z.object({
@@ -72,49 +104,53 @@ export const candidateProfileDataSchema = z.object({
     github: optionalString,
     twitter: optionalString,
   }),
-  target_roles: z.object({
-    primary: z.array(nonEmptyString).default([]),
-    archetypes: z
-      .array(
-        z.object({
-          name: optionalString,
-          level: optionalString,
-          fit: z.enum(["primary", "secondary", "adjacent"]).default("primary"),
-        }),
-      )
-      .default([]),
-  }),
-  narrative: z.object({
-    headline: optionalString,
-    exit_story: optionalString,
-    superpowers: z.array(nonEmptyString).default([]),
-    proof_points: z
-      .array(
-        z.object({
-          name: optionalString,
-          url: optionalString,
-          hero_metric: optionalString,
-        }),
-      )
-      .default([]),
-  }),
-  compensation: z.object({
-    target_range: optionalString,
-    currency: optionalString,
-    minimum: optionalString,
-    location_flexibility: optionalString,
-  }),
-  location: z.object({
-    country: optionalString,
+  personal_details: z.object({
+    address: optionalString,
     city: optionalString,
-    timezone: optionalString,
-    visa_status: optionalString,
+    postal_code: optionalString,
+    country: optionalString,
+    citizenship: optionalString,
+    work_authorization: optionalString,
+    current_occupation: optionalString,
+    notice_period: optionalString,
+    willing_to_relocate: optionalString,
+    date_of_birth: optionalString,
+    gender: optionalString,
   }),
+  education: z
+    .array(
+      z.object({
+        institution: optionalString,
+        degree: optionalString,
+        field_of_study: optionalString,
+        start_date: optionalString,
+        end_date: optionalString,
+        grade: optionalString,
+      }),
+    )
+    .default([]),
+  work_experience: z
+    .array(
+      z.object({
+        job_title: optionalString,
+        company: optionalString,
+        location: optionalString,
+        start_date: optionalString,
+        end_date: optionalString,
+        is_current: z.boolean().default(false),
+        description: optionalString,
+      }),
+    )
+    .default([]),
+  ai_summary: optionalString,
 });
 
 export const candidateProfileUpdateSchema = z.object({
-  cv_markdown: z.string().max(120000).optional(),
   profile_data: candidateProfileDataSchema.optional(),
+});
+
+export const kanbanColumnOrderSchema = z.object({
+  kanbanColumnOrder: z.array(z.enum(APPLICATION_STATUSES)).min(1),
 });
 
 export const jobAnalysisRequestSchema = z.object({
@@ -163,7 +199,7 @@ export const jobAnalysisResultSchema = z.object({
   company_name: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),
   job_title: z.string().trim().max(200).nullable().or(z.undefined().transform(() => null)),
   score: z.number().int().min(0).max(100),
-  strengths_md: z.string().trim().min(1),
+  matches_md: z.string().trim().min(1),
   gaps_md: z.string().trim().min(1),
   recommendations_md: z.string().trim().min(1),
   overall_feedback_md: z.string().trim().min(1),

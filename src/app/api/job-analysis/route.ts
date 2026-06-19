@@ -9,7 +9,7 @@ import { extractJobDescription } from "@/lib/profile/extract-job-description";
 import { trackUsage } from "@/lib/db/user-usage";
 import { jobAnalysisRequestSchema } from "@/types/schemas";
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,8 +19,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const analyses = await getJobFitAnalyses(user.id, 30);
-  return NextResponse.json({ analyses });
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 9));
+
+  const { analyses, total } = await getJobFitAnalyses(user.id, { page, limit });
+  return NextResponse.json({ analyses, total });
 }
 
 export async function POST(request: Request) {
@@ -103,7 +107,6 @@ export async function POST(request: Request) {
   try {
     result = await analyzeJobFit({
       cvMarkdown: profile.cv_markdown,
-      profileData: profile.profile_data,
       jobDescription,
     });
   } catch (error) {
@@ -131,7 +134,7 @@ export async function POST(request: Request) {
     source_url: sourceUrl,
     score: result.score,
     band,
-    strengths_md: result.strengths_md,
+    matches_md: result.matches_md,
     gaps_md: result.gaps_md,
     recommendations_md: result.recommendations_md,
     overall_feedback_md: result.overall_feedback_md,
