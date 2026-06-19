@@ -59,6 +59,27 @@ function decodeBody(payload: gmail_v1.Schema$MessagePart): string {
   return "";
 }
 
+/** Returns the raw (un-stripped) text/html body for rich rendering, or "". */
+function decodeHtmlBody(payload: gmail_v1.Schema$MessagePart): string {
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64url").toString("utf-8");
+  }
+
+  const parts = payload.parts ?? [];
+
+  const html = decodePart(parts, "text/html");
+  if (html) return html;
+
+  for (const sub of parts) {
+    if (sub.parts?.length) {
+      const nested = decodeHtmlBody(sub);
+      if (nested) return nested;
+    }
+  }
+
+  return "";
+}
+
 export function parseGmailMessage(
   message: gmail_v1.Schema$Message
 ): GmailMessage {
@@ -67,6 +88,7 @@ export function parseGmailMessage(
   const fromName = getHeader(headers, "from").split("<")[0].trim();
   const subject = getHeader(headers, "subject");
   const bodyText = decodeBody(message.payload ?? {});
+  const bodyHtml = decodeHtmlBody(message.payload ?? {});
 
   return {
     id: message.id ?? "",
@@ -76,6 +98,7 @@ export function parseGmailMessage(
     subject,
     snippet: message.snippet ?? "",
     bodyText,
+    bodyHtml,
     receivedAt: parseInt(message.internalDate ?? "0", 10)
       ? new Date(parseInt(message.internalDate ?? "0", 10)).toISOString()
       : new Date().toISOString(),

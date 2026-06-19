@@ -31,6 +31,8 @@ export interface ApplicationWithSource extends Application {
   email_subject: string | null;
   email_snippet: string | null;
   email_from: string | null;
+  email_body_html: string | null;
+  email_body_text: string | null;
   gmail_message_id: string | null;
 }
 

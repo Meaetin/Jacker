@@ -9,6 +9,7 @@ export interface RawEmail {
   received_at: string | null;
   snippet: string | null;
   body_text: string | null;
+  body_html: string | null;
   parse_status: "pending" | "parsed" | "not_job_related" | "failed";
   parse_error: string | null;
   created_at: string;
@@ -22,5 +23,6 @@ export interface GmailMessage {
   subject: string;
   snippet: string;
   bodyText: string;
+  bodyHtml: string;
   receivedAt: string;
 }

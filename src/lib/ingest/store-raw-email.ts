@@ -20,6 +20,7 @@ export async function storeIfNew(
     received_at: message.receivedAt,
     snippet: message.snippet,
     body_text: message.bodyText,
+    body_html: message.bodyHtml || null,
     parse_status: "pending",
     parse_error: null,
   });

@@ -9,17 +9,27 @@ interface EmailSourceProps {
   from: string | null;
   receivedAt: string | null;
   snippet: string | null;
+  bodyHtml?: string | null;
+  bodyText?: string | null;
   gmailMessageId?: string | null;
 }
 
-export function EmailSource({ subject, from, receivedAt, snippet, gmailMessageId }: EmailSourceProps) {
+export function EmailSource({
+  subject,
+  from,
+  receivedAt,
+  snippet,
+  bodyHtml,
+  bodyText,
+  gmailMessageId,
+}: EmailSourceProps) {
   const [expanded, setExpanded] = useState(false);
 
   const gmailUrl = gmailMessageId
     ? `https://mail.google.com/mail/u/0/#inbox/${gmailMessageId}`
     : null;
 
-  const hasContent = subject || from || snippet;
+  const hasContent = subject || from || snippet || bodyHtml || bodyText;
 
   if (!hasContent) return null;
 
@@ -52,10 +62,21 @@ export function EmailSource({ subject, from, receivedAt, snippet, gmailMessageId
               {formatDate(receivedAt)}
             </p>
           )}
-          {snippet && (
-            <p className="email-source-snippet text-sm text-text-secondary mt-2">
-              {snippet}
-            </p>
+          {bodyHtml ? (
+            <div
+              className="email-source-html mt-3 max-w-full overflow-x-auto text-sm text-text-primary [&_a]:text-brand [&_a]:underline [&_table]:max-w-full"
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            />
+          ) : bodyText ? (
+            <pre className="email-source-text mt-3 whitespace-pre-wrap break-words font-body text-sm text-text-secondary">
+              {bodyText}
+            </pre>
+          ) : (
+            snippet && (
+              <p className="email-source-snippet text-sm text-text-secondary mt-2">
+                {snippet}
+              </p>
+            )
           )}
           {gmailUrl && (
             <a
