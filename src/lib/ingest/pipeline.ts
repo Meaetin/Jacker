@@ -17,10 +17,23 @@ export interface IngestResult {
   errors: string[];
 }
 
+export interface IngestProgress {
+  total: number;
+  processed: number;
+  newApplications: number;
+  updatedApplications: number;
+}
+
+export interface IngestOptions {
+  fromDate?: Date;
+  onProgress?: (progress: IngestProgress) => void | Promise<void>;
+}
+
 export async function runIngestPipeline(
   userId: string,
-  fromDate?: Date
+  options: IngestOptions = {}
 ): Promise<IngestResult> {
+  const { fromDate, onProgress } = options;
   const result: IngestResult = {
     fetched: 0,
     newEmails: 0,
@@ -55,6 +68,11 @@ export async function runIngestPipeline(
     tokens.gmail_refresh_token
   );
 
+  // Capture the watermark BEFORE fetching. Saving the finish time would skip
+  // any email that arrives while this run is parsing (its received time would
+  // predate the watermark), so the next sync starts from when scanning began.
+  const syncStartedAt = new Date().toISOString();
+
   // Step 1: Fetch recent emails
   const afterDate = fromDate ?? (tokens.last_sync_at ? new Date(tokens.last_sync_at) : undefined);
   if (afterDate) {
@@ -75,6 +93,16 @@ export async function runIngestPipeline(
     return result;
   }
 
+  // Report total up-front so the UI can show "Parsing 0 of N".
+  const report = (i: number) =>
+    onProgress?.({
+      total: emails.length,
+      processed: i,
+      newApplications: result.newApplications,
+      updatedApplications: result.updatedApplications,
+    });
+  await report(0);
+
   // Step 2: Process each email
   for (let i = 0; i < emails.length; i++) {
     const email = emails[i];
@@ -83,7 +111,10 @@ export async function runIngestPipeline(
       // Store raw email (dedup by gmail_message_id)
       const { id, isNew } = await storeIfNew(email, userId);
       rawEmailId = id;
-      if (!isNew) continue;
+      if (!isNew) {
+        await report(i + 1);
+        continue;
+      }
       result.newEmails++;
 
       // Step 3: Pre-filter
@@ -93,6 +124,7 @@ export async function runIngestPipeline(
           .from("raw_emails")
           .update({ parse_status: "not_job_related" })
           .eq("id", rawEmailId);
+        await report(i + 1);
         continue;
       }
 
@@ -164,12 +196,13 @@ export async function runIngestPipeline(
           .eq("id", rawEmailId);
       }
     }
+    await report(i + 1);
   }
 
-  // Update last_sync_at
+  // Update last_sync_at to when this run started scanning (see note above).
   await supabase
     .from("user_tokens")
-    .update({ last_sync_at: new Date().toISOString() })
+    .update({ last_sync_at: syncStartedAt })
     .eq("user_id", userId);
 
   // Record OpenAI usage for this run

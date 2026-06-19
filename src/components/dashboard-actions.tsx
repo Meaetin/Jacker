@@ -1,22 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { RefreshCw, LoaderCircle, X } from "lucide-react";
+import { useSyncJob, type SyncJob } from "@/hooks/use-sync-job";
+import { formatRelativeTime, formatTimestamp, formatDate } from "@/utils/date";
 
 interface DashboardActionsProps {
   gmailConnected: boolean;
   isDemo?: boolean;
-}
-
-interface SyncResult {
-  fetched: number;
-  newEmails: number;
-  parsed: number;
-  newApplications: number;
-  updatedApplications: number;
-  errors: string[];
-  duration?: string;
+  userId?: string;
+  lastSyncAt?: string | null;
 }
 
 interface ReparseResult {
@@ -28,30 +21,60 @@ interface ReparseResult {
   duration?: string;
 }
 
-export function DashboardActions({ gmailConnected, isDemo = false }: DashboardActionsProps) {
-  const router = useRouter();
-  const [syncing, setSyncing] = useState(false);
+export function DashboardActions({ gmailConnected, isDemo = false, userId, lastSyncAt = null }: DashboardActionsProps) {
+  const job = useSyncJob(userId);
+  // After a sync finishes this session, reflect its time without a refresh.
+  const effectiveLastSync =
+    job?.status === "done" && job.finished_at ? job.finished_at : lastSyncAt;
+  // "starting" bridges the gap between clicking Sync and the job row arriving
+  // over Realtime; after that the job's status drives the spinner.
+  const [starting, setStarting] = useState(false);
   const [reparsing, setReparsing] = useState(false);
   const [syncFromDate, setSyncFromDate] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [syncDone, setSyncDone] = useState<SyncJob | null>(null);
   const [reparseResult, setReparseResult] = useState<ReparseResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [reparseError, setReparseError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const handledJobRef = useRef<string | null>(null);
 
+  const syncing = starting || job?.status === "running";
   const busy = syncing || reparsing;
 
+  const syncLabel =
+    job?.status === "running" && job.total > 0
+      ? `Parsing ${job.processed}/${job.total}…`
+      : syncing
+        ? "Syncing…"
+        : reparsing
+          ? "Parsing…"
+          : "Sync";
+
+  // Surface a toast once when a job finishes (done or error).
   useEffect(() => {
-    if (!syncResult && !reparseResult && !syncError && !reparseError) return;
+    if (!job || job.status === "running") return;
+    const key = `${job.id}:${job.status}`;
+    if (handledJobRef.current === key) return;
+    handledJobRef.current = key;
+    setStarting(false);
+    if (job.status === "error") {
+      setSyncError(job.error || "Sync failed");
+    } else {
+      setSyncDone(job);
+    }
+  }, [job]);
+
+  useEffect(() => {
+    if (!syncDone && !reparseResult && !syncError && !reparseError) return;
     const timer = setTimeout(() => {
-      setSyncResult(null);
+      setSyncDone(null);
       setReparseResult(null);
       setSyncError(null);
       setReparseError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [syncResult, reparseResult, syncError, reparseError]);
+  }, [syncDone, reparseResult, syncError, reparseError]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -64,9 +87,9 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
   }, []);
 
   async function handleSync() {
-    setSyncing(true);
+    setStarting(true);
     setDropdownOpen(false);
-    setSyncResult(null);
+    setSyncDone(null);
     setSyncError(null);
 
     try {
@@ -85,12 +108,26 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
         return;
       }
 
-      setSyncResult(data);
-      router.refresh();
+      // The request resolves only when the pipeline finishes. Build a final
+      // snapshot from the response so the toast works even if Realtime is down,
+      // and mark it handled so the Realtime "done" event doesn't double-toast.
+      const doneJob: SyncJob = {
+        id: data.jobId ?? "local",
+        status: "done",
+        total: data.fetched ?? 0,
+        processed: data.fetched ?? 0,
+        new_applications: data.newApplications ?? 0,
+        updated_applications: data.updatedApplications ?? 0,
+        error: null,
+        started_at: "",
+        finished_at: null,
+      };
+      handledJobRef.current = `${doneJob.id}:done`;
+      setSyncDone(doneJob);
     } catch {
       setSyncError("Network error — check your connection and try again");
     } finally {
-      setSyncing(false);
+      setStarting(false);
     }
   }
 
@@ -109,10 +146,8 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
         return;
       }
 
+      // New/updated applications stream in via Realtime — no refresh needed.
       setReparseResult(data);
-      if (data.newApplications > 0) {
-        router.refresh();
-      }
     } catch {
       setReparseError("Network error — check your connection and try again");
     } finally {
@@ -121,7 +156,7 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
   }
 
   function dismissResult() {
-    setSyncResult(null);
+    setSyncDone(null);
     setReparseResult(null);
     setSyncError(null);
     setReparseError(null);
@@ -156,7 +191,16 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
 
   return (
     <div className="sync-actions flex flex-col gap-2">
-      <div ref={dropdownRef} className="sync-dropdown relative">
+      <div className="sync-controls flex items-center gap-3">
+        {!syncing && (
+          <span
+            className="sync-last-synced text-xs text-text-muted"
+            title={effectiveLastSync ? `Last synced ${formatTimestamp(effectiveLastSync)}` : undefined}
+          >
+            Last synced: {formatRelativeTime(effectiveLastSync)}
+          </span>
+        )}
+        <div ref={dropdownRef} className="sync-dropdown relative">
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={busy}
@@ -167,7 +211,7 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
           ) : (
             <RefreshCw className="sync-icon h-4 w-4" />
           )}
-          {syncing ? "Syncing…" : reparsing ? "Parsing…" : "Sync"}
+          {syncLabel}
         </button>
 
         {dropdownOpen && !busy && (
@@ -183,6 +227,11 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
                 onChange={(e) => setSyncFromDate(e.target.value)}
                 className="sync-date-input input-field text-sm"
               />
+              <p className="sync-date-hint text-xs text-text-muted">
+                {effectiveLastSync
+                  ? `Leave empty to sync from last sync (${formatDate(effectiveLastSync)}).`
+                  : "Leave empty to sync the last 30 days."}
+              </p>
             </div>
             <div className="sync-action-buttons flex flex-col gap-2">
               <button
@@ -200,9 +249,10 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
             </div>
           </div>
         )}
+        </div>
       </div>
 
-      {(syncResult || syncError || reparseResult || reparseError) && (
+      {(syncDone || syncError || reparseResult || reparseError) && (
         <div className="sync-toast">
           {syncError && (
             <div className="sync-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
@@ -222,15 +272,14 @@ export function DashboardActions({ gmailConnected, isDemo = false }: DashboardAc
             </div>
           )}
 
-          {syncResult && !syncError && (
+          {syncDone && !syncError && (
             <div className="sync-success-toast flex items-start gap-2 rounded-lg bg-brand-light border border-brand/20 text-sm p-3">
               <div className="sync-toast-body flex-1">
-                <p className="font-medium text-brand">
-                  Sync complete{syncResult.duration ? ` in ${syncResult.duration}` : ""}
-                </p>
+                <p className="font-medium text-brand">Sync complete</p>
                 <p className="text-brand/80">
-                  {syncResult.fetched} fetched, {syncResult.newEmails} new
-                  {syncResult.newApplications > 0 && ` — ${syncResult.newApplications} new application${syncResult.newApplications !== 1 ? "s" : ""}`}
+                  {syncDone.processed} processed
+                  {syncDone.new_applications > 0 && ` — ${syncDone.new_applications} new application${syncDone.new_applications !== 1 ? "s" : ""}`}
+                  {syncDone.updated_applications > 0 && `, ${syncDone.updated_applications} updated`}
                 </p>
               </div>
               <button onClick={dismissResult} className="sync-dismiss text-brand/40 hover:text-brand">
