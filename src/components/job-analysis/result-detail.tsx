@@ -15,14 +15,14 @@ interface ResultDetailProps {
 }
 
 const SECTION_CONFIG = [
-  { icon: ThumbsUp, title: "Strengths", accent: "#6b9f6b", bg: "#edf5ed", titleColor: "#5a8a5a" },
+  { icon: ThumbsUp, title: "Matches", accent: "#6b9f6b", bg: "#edf5ed", titleColor: "#5a8a5a" },
   { icon: AlertTriangle, title: "Gaps", accent: "#c47070", bg: "#f8eded", titleColor: "#b06060" },
   { icon: Lightbulb, title: "Recommendations", accent: "#d49b3a", bg: "#faf3e5", titleColor: "#c08a2a" },
   { icon: MessageSquare, title: "Overall", accent: "#5b8fb9", bg: "#edf4f9", titleColor: "#4a7fa0" },
 ];
 
 const SECTION_BODY_KEYS: Record<string, keyof JobFitAnalysis> = {
-  Strengths: "strengths_md",
+  Matches: "matches_md",
   Gaps: "gaps_md",
   Recommendations: "recommendations_md",
   Overall: "overall_feedback_md",

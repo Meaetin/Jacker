@@ -12,17 +12,17 @@ export default async function ChatPage() {
 
   const demo = isDemoUser(user?.email);
 
-  const [profile, analyses] = user
+  const [profile, history] = user
     ? await Promise.all([
         getCandidateProfile(user.id),
-        getJobFitAnalyses(user.id, 30),
+        getJobFitAnalyses(user.id, { page: 1, limit: 30 }),
       ])
-    : [null, []];
+    : [null, { analyses: [], total: 0 }];
 
   return (
     <ChatWorkspace
       profileReady={Boolean(profile?.cv_markdown)}
-      analyses={analyses}
+      analyses={history.analyses}
       isDemo={demo}
     />
   );

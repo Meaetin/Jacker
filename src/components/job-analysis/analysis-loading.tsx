@@ -17,7 +17,7 @@ export function AnalysisLoading() {
 
       {/* Themed section skeletons */}
       {[
-        { bg: "#edf5ed", label: "Strengths" },
+        { bg: "#edf5ed", label: "Matches" },
         { bg: "#f8eded", label: "Gaps" },
         { bg: "#faf3e5", label: "Recommendations" },
         { bg: "#edf4f9", label: "Overall" },

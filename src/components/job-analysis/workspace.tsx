@@ -10,17 +10,21 @@ import type { JobFitAnalysis } from "@/types/profile";
 
 interface JobAnalysisWorkspaceProps {
   initialAnalyses: JobFitAnalysis[];
+  initialTotal: number;
   profileReady: boolean;
 }
 
 type InputMode = "paste" | "url";
 
-type WorkspaceView =
-  | { mode: "empty" }
-  | { mode: "input"; returnTo?: string }
-  | { mode: "result"; selectedId: string };
+type WorkspaceView = "empty" | "input" | "result";
 
-export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnalysisWorkspaceProps) {
+const HISTORY_PAGE_SIZE = 9;
+
+export function JobAnalysisWorkspace({
+  initialAnalyses,
+  initialTotal,
+  profileReady,
+}: JobAnalysisWorkspaceProps) {
   const [inputMode, setInputMode] = useState<InputMode>("paste");
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
@@ -28,24 +32,38 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
   const [jobTitle, setJobTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analyses, setAnalyses] = useState<JobFitAnalysis[]>(initialAnalyses);
   const [prefillActive, setPrefillActive] = useState(false);
   const prefillCounter = useRef(0);
 
-  // Derive view from state
-  const [view, setView] = useState<WorkspaceView>(() => {
-    if (initialAnalyses.length === 0) return { mode: "empty" };
-    return { mode: "result", selectedId: initialAnalyses[0].id };
-  });
+  // Sidebar shows one page at a time; the selected analysis is tracked separately
+  // so it stays visible in the detail pane even when the user pages away from it.
+  const [pageItems, setPageItems] = useState<JobFitAnalysis[]>(initialAnalyses);
+  const [total, setTotal] = useState(initialTotal);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<JobFitAnalysis | null>(
+    initialAnalyses[0] ?? null,
+  );
 
-  const selectedAnalysis =
-    view.mode === "result"
-      ? analyses.find((a) => a.id === view.selectedId) ?? analyses[0] ?? null
-      : view.mode === "input" && view.returnTo
-        ? analyses.find((a) => a.id === view.returnTo) ?? null
-        : null;
+  const [view, setView] = useState<WorkspaceView>(
+    initialAnalyses.length === 0 ? "empty" : "result",
+  );
 
-  const effectiveLoading = loading && view.mode === "input" ? true : false;
+  const effectiveLoading = loading && view === "input";
+
+  async function fetchHistoryPage(page: number) {
+    try {
+      const res = await fetch(
+        `/api/job-analysis?page=${page}&limit=${HISTORY_PAGE_SIZE}`,
+      );
+      const data = await res.json();
+      if (!res.ok) return;
+      setPageItems(data.analyses);
+      setTotal(data.total);
+      setHistoryPage(page);
+    } catch {
+      // Keep the current page on a fetch failure
+    }
+  }
 
   // Listen for prefill events from Chrome extension
   useEffect(() => {
@@ -57,18 +75,11 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
       setError(null);
       setPrefillActive(true);
       prefillCounter.current += 1;
-      // Switch to input mode
-      if (analyses.length === 0) {
-        setView({ mode: "empty" });
-      } else {
-        const currentId =
-          view.mode === "result" ? view.selectedId : undefined;
-        setView({ mode: "input", returnTo: currentId });
-      }
+      setView(total === 0 ? "empty" : "input");
     }
     window.addEventListener("job-tracker:prefill", handlePrefill);
     return () => window.removeEventListener("job-tracker:prefill", handlePrefill);
-  }, [analyses.length, view]);
+  }, [total]);
 
   async function runAnalysis() {
     setLoading(true);
@@ -90,13 +101,14 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
         setError(data.error || "Analysis failed");
         return;
       }
-      const newAnalyses = [data.analysis, ...analyses];
-      setAnalyses(newAnalyses);
+      setSelectedAnalysis(data.analysis);
       setJobDescription("");
       setJobUrl("");
       setCompanyName("");
       setJobTitle("");
-      setView({ mode: "result", selectedId: data.analysis.id });
+      setView("result");
+      // Refresh page 1 so the new analysis appears at the top with an updated count
+      await fetchHistoryPage(1);
     } catch {
       setError("Analysis failed due to a network error.");
     } finally {
@@ -105,26 +117,24 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
   }
 
   function handleNewAnalysis() {
-    const currentId =
-      view.mode === "result" ? view.selectedId : undefined;
-    setView({ mode: "input", returnTo: currentId });
+    setView("input");
     setError(null);
   }
 
   function handleCloseInput() {
-    if (analyses.length > 0) {
-      const targetId =
-        view.mode === "input" && view.returnTo
-          ? view.returnTo
-          : analyses[0].id;
-      setView({ mode: "result", selectedId: targetId });
+    if (total > 0 || selectedAnalysis) {
+      if (!selectedAnalysis && pageItems.length > 0) {
+        setSelectedAnalysis(pageItems[0]);
+      }
+      setView("result");
     } else {
-      setView({ mode: "empty" });
+      setView("empty");
     }
   }
 
   function handleSelectAnalysis(id: string) {
-    setView({ mode: "result", selectedId: id });
+    setSelectedAnalysis(pageItems.find((a) => a.id === id) ?? null);
+    setView("result");
   }
 
   const canSubmit =
@@ -138,7 +148,7 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
     <div className="job-analysis-page max-w-6xl mx-auto">
       <AnimatePresence mode="wait">
         {/* Mode A: Empty state */}
-        {view.mode === "empty" && (
+        {view === "empty" && (
           <motion.div
             key="empty"
             initial={{ opacity: 0 }}
@@ -167,7 +177,7 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
         )}
 
         {/* Mode B: Input-focused */}
-        {view.mode === "input" && analyses.length > 0 && (
+        {view === "input" && total > 0 && (
           <motion.div
             key="input"
             initial={{ opacity: 0 }}
@@ -204,7 +214,7 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
         )}
 
         {/* Mode C: Results-focused */}
-        {view.mode === "result" && (
+        {view === "result" && (
           <motion.div
             key="result"
             initial={{ opacity: 0 }}
@@ -215,8 +225,12 @@ export function JobAnalysisWorkspace({ initialAnalyses, profileReady }: JobAnaly
           >
             <div className="result-mode-left w-[320px] flex-shrink-0">
               <HistorySidebar
-                analyses={analyses}
-                selectedId={view.selectedId}
+                analyses={pageItems}
+                selectedId={selectedAnalysis?.id ?? null}
+                total={total}
+                page={historyPage}
+                pageSize={HISTORY_PAGE_SIZE}
+                onPageChange={fetchHistoryPage}
                 onSelect={handleSelectAnalysis}
                 onNewAnalysis={handleNewAnalysis}
               />

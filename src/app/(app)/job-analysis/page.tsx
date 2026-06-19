@@ -9,12 +9,18 @@ export default async function JobAnalysisPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, analyses] = user
+  const [profile, history] = user
     ? await Promise.all([
         getCandidateProfile(user.id),
-        getJobFitAnalyses(user.id, 30),
+        getJobFitAnalyses(user.id, { page: 1, limit: 9 }),
       ])
-    : [null, []];
+    : [null, { analyses: [], total: 0 }];
 
-  return <JobAnalysisWorkspace profileReady={Boolean(profile?.cv_markdown)} initialAnalyses={analyses} />;
+  return (
+    <JobAnalysisWorkspace
+      profileReady={Boolean(profile?.cv_markdown)}
+      initialAnalyses={history.analyses}
+      initialTotal={history.total}
+    />
+  );
 }
