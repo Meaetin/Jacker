@@ -105,6 +105,7 @@ export async function upsertApplication(
 
     const { data, error } = await updateApplication(existing.id, userId, {
       status,
+      status_source: "email",
       status_confidence: parseResult.status_confidence,
       source_email_id: rawEmailId,
       // Detail fields only move forward — a later email that says nothing about
@@ -135,6 +136,7 @@ export async function upsertApplication(
     company,
     role,
     status,
+    status_source: "email",
     status_confidence: parseResult.status_confidence,
     source_email_id: rawEmailId,
     gmail_thread_id: threadId,

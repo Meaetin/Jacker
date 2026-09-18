@@ -9,6 +9,8 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+export type StatusSource = "email" | "manual";
+
 export interface Application {
   id: string;
   user_id: string;
@@ -16,6 +18,8 @@ export interface Application {
   role: string | null;
   status: ApplicationStatus;
   status_confidence: number | null;
+  /** Who last set the status. Provenance only — resolution still goes by date. */
+  status_source: StatusSource;
   source_email_id: string | null;
   gmail_thread_id: string | null;
   interview_date: string | null;

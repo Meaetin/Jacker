@@ -56,7 +56,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // hand-edited one has no email behind it, so without a date of its own the
     // row still looks last-touched by whatever email set it — and the next
     // email of any age would silently undo the correction.
-    ...(parsed.data.status !== undefined ? { application_updated_at: now } : {}),
+    ...(parsed.data.status !== undefined
+      ? { application_updated_at: now, status_source: "manual" }
+      : {}),
   });
 
   if (error) {
