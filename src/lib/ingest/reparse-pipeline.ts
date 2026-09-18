@@ -50,7 +50,8 @@ export async function runReparsePipeline(
     .select()
     .eq("user_id", userId)
     .in("parse_status", ["pending", "failed"])
-    .order("received_at", { ascending: false });
+    // Oldest first, matching runIngestPipeline, so the logs read as a timeline.
+    .order("received_at", { ascending: true });
 
   if (fetchError) {
     console.error("[reparse] Failed to fetch raw emails:", fetchError.message);
