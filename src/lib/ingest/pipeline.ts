@@ -14,6 +14,11 @@ import type { GmailMessage } from "@/types/email";
 // Held at 8 to match the Gmail fetch pool — gpt-4.1-nano's limits are far higher.
 const PARSE_CONCURRENCY = 8;
 
+// Emails per run. Sized to finish inside the 300s serverless ceiling; anything
+// over this is reported as `remaining` and picked up by the next run rather than
+// being dropped.
+const EMAILS_PER_RUN = 150;
+
 /** An email that survived dedup and the pre-filter, and has been parsed. */
 interface ParsedEmail {
   email: GmailMessage;
@@ -27,6 +32,8 @@ export interface IngestResult {
   parsed: number;
   newApplications: number;
   updatedApplications: number;
+  /** Emails this search matched that the per-run cap left for a later run. */
+  remaining: number;
   errors: string[];
 }
 
@@ -53,6 +60,7 @@ export async function runIngestPipeline(
     parsed: 0,
     newApplications: 0,
     updatedApplications: 0,
+    remaining: 0,
     errors: [],
   };
 
@@ -98,9 +106,11 @@ export async function runIngestPipeline(
 
   let emails;
   try {
-    emails = await fetchRecentEmails(auth, 200, afterDate, userId, admin);
+    const fetched = await fetchRecentEmails(auth, EMAILS_PER_RUN, afterDate, userId, admin);
+    emails = fetched.emails;
+    result.remaining = fetched.remaining;
     result.fetched = emails.length;
-    console.log(`[ingest] Fetched ${emails.length} emails`);
+    console.log(`[ingest] Fetched ${emails.length} emails, ${result.remaining} left for a later run`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error(`[ingest] Gmail fetch failed: ${msg}`);
@@ -248,11 +258,32 @@ export async function runIngestPipeline(
     await report(processed);
   }
 
-  // Update last_sync_at to when this run started scanning (see note above).
-  await admin
-    .from("user_tokens")
-    .update({ last_sync_at: syncStartedAt })
-    .eq("user_id", userId);
+  // Only advance the watermark once this search window is drained. Moving it
+  // after a capped run would push last_sync_at past emails we never fetched, and
+  // the next search starts from the watermark — so they would never be seen
+  // again. Leaving it put means the next run re-searches the same window and
+  // picks up where this one stopped (raw_emails already excludes what was done).
+  //
+  // The newEmails guard stops a hold from wedging forever. An email that fails
+  // to store is never in raw_emails, so it stays "new" and keeps counting toward
+  // `remaining` on every run. If a whole run stored nothing, holding the
+  // watermark just repeats the same failure tomorrow — advance instead.
+  const storedSomething = result.newEmails > 0;
+  if (result.remaining === 0 || !storedSomething) {
+    if (result.remaining > 0) {
+      console.warn(
+        `[ingest] Advancing last_sync_at despite ${result.remaining} remaining — this run stored no new emails, so holding would wedge`
+      );
+    }
+    await admin
+      .from("user_tokens")
+      .update({ last_sync_at: syncStartedAt })
+      .eq("user_id", userId);
+  } else {
+    console.log(
+      `[ingest] Holding last_sync_at — ${result.remaining} emails still to process in this window`
+    );
+  }
 
   // Record OpenAI usage for this run
   if (emailsScanned > 0) {
@@ -266,6 +297,6 @@ export async function runIngestPipeline(
     }, admin);
   }
 
-  console.log(`[ingest] Pipeline complete. Fetched: ${result.fetched}, New: ${result.newEmails}, Parsed: ${result.parsed}, New apps: ${result.newApplications}, Errors: ${result.errors.length}`);
+  console.log(`[ingest] Pipeline complete. Fetched: ${result.fetched}, New: ${result.newEmails}, Parsed: ${result.parsed}, New apps: ${result.newApplications}, Remaining: ${result.remaining}, Errors: ${result.errors.length}`);
   return result;
 }

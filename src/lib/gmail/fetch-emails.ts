@@ -16,13 +16,19 @@ const BODY_FETCH_CONCURRENCY = 8;
 // Message ids per stored-email lookup — PostgREST puts them all in the URL.
 const ID_LOOKUP_CHUNK = 200;
 
+export interface FetchEmailsResult {
+  emails: GmailMessage[];
+  /** New messages this search matched but the cap left behind. */
+  remaining: number;
+}
+
 export async function fetchRecentEmails(
   auth: OAuth2Client,
   maxResults = 200,
   afterDate?: Date,
   userId?: string,
   db?: Db
-): Promise<GmailMessage[]> {
+): Promise<FetchEmailsResult> {
   const gmail = google.gmail({ version: "v1", auth });
 
   let query: string;
@@ -96,14 +102,20 @@ export async function fetchRecentEmails(
     console.log(`[gmail] ${allIds.length} total, ${storedSet.size} already stored, ${targetIds.length} new`);
   }
 
+  // Count what the cap leaves behind before slicing. The caller needs this to
+  // decide whether this window is drained.
+  const remaining = Math.max(0, targetIds.length - maxResults);
   targetIds = targetIds.slice(0, maxResults);
 
+  if (remaining > 0) {
+    console.log(`[gmail] Capped at ${maxResults}; ${remaining} new messages left for the next run`);
+  }
   console.log(`[gmail] Found ${allIds.length} messages, fetching ${targetIds.length} oldest full bodies...`);
 
   // Fetch full message bodies. mapWithConcurrency preserves input order, so the
   // oldest-first ordering established above survives the parallel fetch.
   let fetched = 0;
-  return mapWithConcurrency(targetIds, BODY_FETCH_CONCURRENCY, async (id) => {
+  const emails = await mapWithConcurrency(targetIds, BODY_FETCH_CONCURRENCY, async (id) => {
     const { data: full } = await gmail.users.messages.get({
       userId: "me",
       id,
@@ -116,4 +128,6 @@ export async function fetchRecentEmails(
     }
     return parseGmailMessage(full);
   });
+
+  return { emails, remaining };
 }
