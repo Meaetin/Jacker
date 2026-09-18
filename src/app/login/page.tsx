@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login, signInWithGoogle } from "./actions";
@@ -78,16 +79,32 @@ export default function LoginPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        <form className="mt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            className="demo-button w-full"
-            onClick={() => { window.location.href = "/demo-login"; }}
-          >
-            Try the Demo
-          </Button>
-        </form>
+        <Button
+          type="button"
+          variant="secondary"
+          className="google-signin-button w-full mt-4"
+          disabled={loading}
+          onClick={handleGoogleSignIn}
+        >
+          <Image
+            src="/google.svg"
+            alt=""
+            width={16}
+            height={16}
+            unoptimized
+            className="google-signin-icon"
+          />
+          Sign in with Google
+        </Button>
+
+        <Button
+          type="button"
+          variant="secondary"
+          className="demo-button w-full mt-3"
+          onClick={() => { window.location.href = "/demo-login"; }}
+        >
+          Try the Demo
+        </Button>
       </div>
     </main>
   );
