@@ -6,7 +6,6 @@ import { logParseResult } from "@/lib/parser/parse-log";
 import { storeIfNew } from "@/lib/ingest/store-raw-email";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
 import { trackUsage } from "@/lib/db/user-usage";
-import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export interface IngestResult {
@@ -50,8 +49,8 @@ export async function runIngestPipeline(
 
   console.log(`[ingest] Starting pipeline for user ${userId}`);
 
-  // Get user's Gmail tokens
-  const supabase = await createClient();
+  // Cron runs this with no signed-in user, so every query below goes through
+  // the service-role client, scoped by the userId passed in.
   const admin = createAdminClient();
   const { data: tokens } = await admin
     .from("user_tokens")
@@ -67,7 +66,8 @@ export async function runIngestPipeline(
 
   const auth = createGmailClient(
     tokens.gmail_access_token ?? "",
-    tokens.gmail_refresh_token
+    tokens.gmail_refresh_token,
+    userId
   );
 
   // Capture the watermark BEFORE fetching. Saving the finish time would skip
@@ -85,7 +85,7 @@ export async function runIngestPipeline(
 
   let emails;
   try {
-    emails = await fetchRecentEmails(auth, 200, afterDate, userId);
+    emails = await fetchRecentEmails(auth, 200, afterDate, userId, admin);
     result.fetched = emails.length;
     console.log(`[ingest] Fetched ${emails.length} emails`);
   } catch (error) {
@@ -111,7 +111,7 @@ export async function runIngestPipeline(
     let rawEmailId: string | undefined;
     try {
       // Store raw email (dedup by gmail_message_id)
-      const { id, isNew } = await storeIfNew(email, userId);
+      const { id, isNew } = await storeIfNew(email, userId, admin);
       rawEmailId = id;
       if (!isNew) {
         await report(i + 1);
@@ -122,7 +122,7 @@ export async function runIngestPipeline(
       // Step 3: Pre-filter
       if (!isLikelyJobRelated(email)) {
         console.log(`[ingest] [${i + 1}/${emails.length}] Skipped (not job-related): "${email.subject}"`);
-        await supabase
+        await admin
           .from("raw_emails")
           .update({ parse_status: "not_job_related" })
           .eq("id", rawEmailId);
@@ -146,18 +146,19 @@ export async function runIngestPipeline(
 
       // Step 5: Log parse result + update parse_status on raw_email
       if (parseOutput.success) {
-        await supabase
+        await admin
           .from("raw_emails")
           .update({ parse_status: "parsed" })
           .eq("id", rawEmailId);
       } else {
-        await supabase
+        await admin
           .from("raw_emails")
           .update({ parse_status: "failed", parse_error: parseOutput.error ?? null })
           .eq("id", rawEmailId);
       }
 
       await logParseResult({
+        db: admin,
         userId,
         rawEmailId,
         rawResponse: parseOutput.rawResponse,
@@ -175,7 +176,8 @@ export async function runIngestPipeline(
           rawEmailId,
           email.threadId,
           userId,
-          email.receivedAt
+          email.receivedAt,
+          admin
         );
 
         const company = parseOutput.result.company_from_email ?? parseOutput.result.company_from_body;
@@ -192,7 +194,7 @@ export async function runIngestPipeline(
       console.error(`[ingest] Error processing email ${email.id}: ${msg}`);
       result.errors.push(`Error processing email ${email.id}: ${msg}`);
       if (rawEmailId) {
-        await supabase
+        await admin
           .from("raw_emails")
           .update({ parse_status: "failed", parse_error: msg })
           .eq("id", rawEmailId);
@@ -216,7 +218,7 @@ export async function runIngestPipeline(
       output_tokens: totalOutputTokens,
       emails_retrieved: result.fetched,
       emails_scanned: emailsScanned,
-    });
+    }, admin);
   }
 
   console.log(`[ingest] Pipeline complete. Fetched: ${result.fetched}, New: ${result.newEmails}, Parsed: ${result.parsed}, New apps: ${result.newApplications}, Errors: ${result.errors.length}`);

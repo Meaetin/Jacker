@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
 
   const auth = createGmailClient(
     tokens.gmail_access_token ?? "",
-    tokens.gmail_refresh_token
+    tokens.gmail_refresh_token,
+    user.id
   );
 
   const gmail = google.gmail({ version: "v1", auth });
