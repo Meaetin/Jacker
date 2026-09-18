@@ -17,14 +17,19 @@ export interface SyncJob {
 }
 
 // A run is capped at 300s by the serverless ceiling, so anything still claiming
-// to be running after ten minutes was killed mid-flight and never reached the
-// code that marks it finished. Treat it as dead rather than spinning forever.
-const STALE_JOB_MS = 10 * 60 * 1000;
+// to be running past that was killed mid-flight — a crash, a redeploy, or the
+// dev server being stopped — and never reached the code that marks it finished.
+// 6 minutes leaves a minute of margin over the 300s ceiling.
+const STALE_JOB_MS = 6 * 60 * 1000;
 
-function isStale(job: SyncJob): boolean {
+// How often to re-check. Without this a job only ages out on a page load, so a
+// stuck spinner survives until the user thinks to refresh.
+const STALE_CHECK_MS = 30 * 1000;
+
+function isStale(job: SyncJob, now: number): boolean {
   return (
     job.status === "running" &&
-    Date.now() - new Date(job.started_at).getTime() > STALE_JOB_MS
+    now - new Date(job.started_at).getTime() > STALE_JOB_MS
   );
 }
 
@@ -35,6 +40,21 @@ function isStale(job: SyncJob): boolean {
  */
 export function useSyncJob(userId?: string): SyncJob | null {
   const [job, setJob] = useState<SyncJob | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Only tick while something claims to be running, and stop once it has aged
+  // out — there is nothing left to watch after that.
+  useEffect(() => {
+    if (!job || job.status !== "running") return;
+
+    const timer = setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (isStale(job, current)) clearInterval(timer);
+    }, STALE_CHECK_MS);
+
+    return () => clearInterval(timer);
+  }, [job]);
 
   useEffect(() => {
     if (!userId) return;
@@ -51,7 +71,7 @@ export function useSyncJob(userId?: string): SyncJob | null {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        if (active && data && !isStale(data as SyncJob)) setJob(data as SyncJob);
+        if (active && data) setJob(data as SyncJob);
       });
 
     const filter = `user_id=eq.${userId}`;
@@ -86,5 +106,8 @@ export function useSyncJob(userId?: string): SyncJob | null {
     };
   }, [userId]);
 
-  return job;
+  // Hide a job that has aged out rather than returning it. Callers treat a
+  // running job as "busy", which disables the button whose only job is to clear
+  // it — reporting null breaks that deadlock and lets a new sync retire the row.
+  return job && isStale(job, now) ? null : job;
 }
