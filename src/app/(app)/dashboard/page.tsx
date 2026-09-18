@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { ApplicationsContent } from "@/components/applications-content";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getApplications, getApplicationStats } from "@/lib/db/applications";
@@ -88,7 +89,7 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
       : { status, search, page: 1, limit: PAGE_SIZE };
 
   const [{ data: tokens }, { data: applications, count }, stats, columnOrder] = await Promise.all([
-    supabase.from("user_tokens").select("user_id, last_sync_at").eq("user_id", userId).maybeSingle(),
+    createAdminClient().from("user_tokens").select("user_id, last_sync_at").eq("user_id", userId).maybeSingle(),
     getApplications(userId, listFilters),
     getApplicationStats(userId),
     getKanbanColumnOrder(userId),

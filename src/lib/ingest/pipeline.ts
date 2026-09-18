@@ -7,6 +7,7 @@ import { storeIfNew } from "@/lib/ingest/store-raw-email";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
 import { trackUsage } from "@/lib/db/user-usage";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export interface IngestResult {
   fetched: number;
@@ -51,7 +52,8 @@ export async function runIngestPipeline(
 
   // Get user's Gmail tokens
   const supabase = await createClient();
-  const { data: tokens } = await supabase
+  const admin = createAdminClient();
+  const { data: tokens } = await admin
     .from("user_tokens")
     .select()
     .eq("user_id", userId)
@@ -200,7 +202,7 @@ export async function runIngestPipeline(
   }
 
   // Update last_sync_at to when this run started scanning (see note above).
-  await supabase
+  await admin
     .from("user_tokens")
     .update({ last_sync_at: syncStartedAt })
     .eq("user_id", userId);

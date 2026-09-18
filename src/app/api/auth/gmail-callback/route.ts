@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { GMAIL_REDIRECT_URI } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Store tokens in user_tokens table
-  const { error } = await supabase.from("user_tokens").upsert(
+  const { error } = await createAdminClient().from("user_tokens").upsert(
     {
       user_id: user.id,
       gmail_refresh_token: tokens.refresh_token,

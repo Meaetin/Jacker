@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: tokens } = await supabase
+  const { data: tokens } = await createAdminClient()
     .from("user_tokens")
     .select("user_id")
     .eq("user_id", user.id)

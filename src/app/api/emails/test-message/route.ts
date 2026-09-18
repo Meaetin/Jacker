@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createGmailClient } from "@/lib/gmail/client";
 import { parseGmailMessage } from "@/lib/gmail/parse-raw";
 import { google } from "googleapis";
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: tokens } = await supabase
+  const { data: tokens } = await createAdminClient()
     .from("user_tokens")
     .select()
     .eq("user_id", user.id)

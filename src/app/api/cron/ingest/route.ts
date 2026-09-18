@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runIngestPipeline } from "@/lib/ingest/pipeline";
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export async function GET(request: NextRequest) {
   // Verify cron secret
@@ -10,8 +10,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Get the primary (non-demo) user
-  const supabase = await createClient();
-  const { data: tokens } = await supabase
+  const { data: tokens } = await createAdminClient()
     .from("user_tokens")
     .select("user_id")
     .limit(1)
