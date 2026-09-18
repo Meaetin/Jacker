@@ -22,6 +22,7 @@ export const aiParseResultSchema = z.object({
   email_type: z
     .enum([
       "application_update",
+      "application_sent",
       "interview_invitation",
       "rejection",
       "offer",

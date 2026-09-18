@@ -163,6 +163,8 @@ export async function runIngestPipeline(
           subject: email.subject,
           fromEmail: email.from,
           fromName: email.fromName,
+          toEmail: email.to,
+          direction: email.direction,
           bodyText: email.bodyText,
         });
 

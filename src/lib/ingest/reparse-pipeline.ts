@@ -87,6 +87,8 @@ export async function runReparsePipeline(
           subject: email.subject ?? "",
           fromEmail: email.from_email ?? "",
           fromName: email.from_name ?? "",
+          toEmail: email.to_email ?? "",
+          direction: email.direction ?? "received",
           bodyText,
         });
 
@@ -131,8 +133,8 @@ export async function runReparsePipeline(
   );
 
   // Phase 2: upsert applications, oldest email first and strictly sequential —
-  // see the same note in runIngestPipeline. The DB query returns newest-first,
-  // so the sort here is what actually establishes the order.
+  // see the same note in runIngestPipeline. The query already orders ascending;
+  // this sort is what guarantees it after concurrent parsing.
   const toUpsert = parsed
     .filter((entry): entry is ParsedRawEmail => entry !== null)
     .filter(({ parseOutput }) => {
