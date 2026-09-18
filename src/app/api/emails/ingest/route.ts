@@ -21,5 +21,13 @@ export async function POST() {
   }
 
   const result = await runIngestPipeline(user.id);
+
+  if (result.fatalError) {
+    return NextResponse.json(
+      { error: result.fatalError.message, code: result.fatalError.code },
+      { status: result.fatalError.code === "gmail_auth" ? 401 : 502 }
+    );
+  }
+
   return NextResponse.json(result);
 }

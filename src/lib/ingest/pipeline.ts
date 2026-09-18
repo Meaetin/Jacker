@@ -26,6 +26,17 @@ interface ParsedEmail {
   parseOutput: Awaited<ReturnType<typeof parseJobEmail>>;
 }
 
+/**
+ * Why a run ended before processing anything. Distinct from `errors`, which
+ * collects per-email problems a run can survive — a fatal failure means nothing
+ * was done and the caller must not report success.
+ */
+export interface IngestFailure {
+  /** `gmail_auth` is recoverable only by the user re-authorising. */
+  code: "no_tokens" | "gmail_auth" | "gmail_fetch";
+  message: string;
+}
+
 export interface IngestResult {
   fetched: number;
   newEmails: number;
@@ -34,6 +45,8 @@ export interface IngestResult {
   updatedApplications: number;
   /** Emails this search matched that the per-run cap left for a later run. */
   remaining: number;
+  /** Set when the run could not start. Absent on success or partial success. */
+  fatalError?: IngestFailure;
   errors: string[];
 }
 
@@ -81,7 +94,8 @@ export async function runIngestPipeline(
 
   if (!tokens) {
     console.error("[ingest] No Gmail tokens found for user");
-    result.errors.push("No Gmail tokens found for user");
+    result.fatalError = { code: "no_tokens", message: "Gmail is not connected" };
+    result.errors.push(result.fatalError.message);
     return result;
   }
 
@@ -114,7 +128,17 @@ export async function runIngestPipeline(
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error(`[ingest] Gmail fetch failed: ${msg}`);
-    result.errors.push(`Gmail fetch failed: ${msg}`);
+
+    // invalid_grant means Google rejected the refresh token outright. Retrying
+    // never helps — only the user re-authorising does — so it gets its own code
+    // and the UI can offer a reconnect instead of a generic failure.
+    result.fatalError = msg.includes("invalid_grant")
+      ? {
+          code: "gmail_auth",
+          message: "Gmail access has expired. Reconnect Gmail to keep syncing.",
+        }
+      : { code: "gmail_fetch", message: `Gmail fetch failed: ${msg}` };
+    result.errors.push(result.fatalError.message);
     return result;
   }
 

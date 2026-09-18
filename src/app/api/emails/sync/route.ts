@@ -113,6 +113,28 @@ export async function POST(request: NextRequest) {
     });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // The pipeline reports a fatal failure in its return value rather than
+    // throwing, so without this a dead Gmail token came back as a 200 and the
+    // dashboard showed a successful sync that had done nothing.
+    if (result.fatalError) {
+      console.error(`[sync] Sync failed after ${elapsed}s: ${result.fatalError.message}`);
+      if (jobId) {
+        await admin
+          .from("sync_jobs")
+          .update({
+            status: "error",
+            error: result.fatalError.message,
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+      }
+      return NextResponse.json(
+        { error: result.fatalError.message, code: result.fatalError.code, jobId },
+        { status: result.fatalError.code === "gmail_auth" ? 401 : 502 }
+      );
+    }
+
     console.log(`[sync] Sync completed in ${elapsed}s`);
 
     if (jobId) {

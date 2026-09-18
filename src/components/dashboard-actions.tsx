@@ -38,6 +38,7 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   const [syncDone, setSyncDone] = useState<SyncJob | null>(null);
   const [reparseResult, setReparseResult] = useState<ReparseResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
   const [reparseError, setReparseError] = useState<string | null>(null);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -98,6 +99,7 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     setDropdownOpen(false);
     setSyncDone(null);
     setSyncError(null);
+    setNeedsReconnect(false);
 
     try {
       const body: { fromDate?: string } = {};
@@ -112,6 +114,10 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
 
       if (!res.ok) {
         setSyncError(data.error || "Sync failed");
+        // A dead refresh token is only fixable by re-authorising, and there is
+        // no other route to it: "Connect Gmail" renders only when no token row
+        // exists, and a broken token still counts as connected.
+        setNeedsReconnect(data.code === "gmail_auth");
         return;
       }
 
@@ -295,7 +301,17 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
         <div className="sync-toast">
           {syncError && (
             <div className="sync-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
-              <p className="flex-1">Sync failed: {syncError}</p>
+              <div className="sync-error-body flex-1">
+                <p>Sync failed: {syncError}</p>
+                {needsReconnect && (
+                  <a
+                    href="/api/auth/gmail"
+                    className="gmail-reconnect-link mt-1 inline-flex font-medium underline"
+                  >
+                    Reconnect Gmail
+                  </a>
+                )}
+              </div>
               <button onClick={dismissResult} className="sync-dismiss text-status-rejected/60 hover:text-status-rejected">
                 <X className="h-4 w-4" />
               </button>
