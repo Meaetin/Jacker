@@ -5,19 +5,26 @@ import { parseJobEmail } from "@/lib/parser/parse-email";
 import { logParseResult } from "@/lib/parser/parse-log";
 import { storeIfNew } from "@/lib/ingest/store-raw-email";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
+import { ApplicationIndex } from "@/lib/ingest/application-index";
 import { trackUsage } from "@/lib/db/user-usage";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { mapWithConcurrency } from "@/utils/concurrency";
 import type { GmailMessage } from "@/types/email";
 
 // Each parse is one OpenAI call plus a couple of per-email Supabase writes.
-// Held at 8 to match the Gmail fetch pool — gpt-4.1-nano's limits are far higher.
-const PARSE_CONCURRENCY = 8;
+// No longer tied to the Gmail fetch pool, which is bound by Google's quota
+// rather than OpenAI's — gpt-4.1-nano's limits are far higher than this. This
+// is the lever that decides how many emails fit in a run.
+const PARSE_CONCURRENCY = 16;
 
 // Emails per run. Sized to finish inside the 300s serverless ceiling; anything
 // over this is reported as `remaining` and picked up by the next run rather than
 // being dropped.
-const EMAILS_PER_RUN = 150;
+//
+// Lowered from 150 after a run processed 129 of 150 and was then killed at
+// 311s. The slowest completed runs work out near 2.4s an email, which puts 100
+// at roughly 240s and leaves a minute of margin under the ceiling.
+const EMAILS_PER_RUN = 100;
 
 /** An email that survived dedup and the pre-filter, and has been parsed. */
 interface ParsedEmail {
@@ -252,6 +259,11 @@ export async function runIngestPipeline(
     })
     .sort((a, b) => a.email.receivedAt.localeCompare(b.email.receivedAt));
 
+  // One read of the user's applications for the whole loop. Matching against
+  // this in memory replaces up to four queries per email.
+  const index = await ApplicationIndex.load(userId, admin);
+  console.log(`[ingest] Matching ${toUpsert.length} emails against ${index.size} applications`);
+
   for (const { email, rawEmailId, parseOutput } of toUpsert) {
     try {
       const upsertResult = await upsertApplication(
@@ -260,6 +272,7 @@ export async function runIngestPipeline(
         email.threadId,
         userId,
         email.receivedAt,
+        index,
         admin
       );
 
@@ -295,21 +308,30 @@ export async function runIngestPipeline(
   // `remaining` on every run. If a whole run stored nothing, holding the
   // watermark just repeats the same failure tomorrow — advance instead.
   const storedSomething = result.newEmails > 0;
-  if (result.remaining === 0 || !storedSomething) {
+  const drained = result.remaining === 0 || !storedSomething;
+
+  // Record what this run left behind either way, so the dashboard can pick the
+  // backlog up on the user's next visit rather than losing it when they close
+  // the tab. A run that force-advances past a remainder it could not shrink has
+  // nothing resumable — the watermark has moved past those emails for good.
+  const tokenUpdate: { pending_emails: number; last_sync_at?: string } = {
+    pending_emails: drained ? 0 : result.remaining,
+  };
+
+  if (drained) {
     if (result.remaining > 0) {
       console.warn(
         `[ingest] Advancing last_sync_at despite ${result.remaining} remaining — this run stored no new emails, so holding would wedge`
       );
     }
-    await admin
-      .from("user_tokens")
-      .update({ last_sync_at: syncStartedAt })
-      .eq("user_id", userId);
+    tokenUpdate.last_sync_at = syncStartedAt;
   } else {
     console.log(
       `[ingest] Holding last_sync_at — ${result.remaining} emails still to process in this window`
     );
   }
+
+  await admin.from("user_tokens").update(tokenUpdate).eq("user_id", userId);
 
   // Record OpenAI usage for this run
   if (emailsScanned > 0) {

@@ -10,6 +10,10 @@ import { isDemoUser } from "@/utils/demo";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+// Matches the dashboard's own staleness cut-off: past this a 'running' row can
+// only be a run the 300s ceiling killed before it could mark itself finished.
+const STALE_JOB_MS = 6 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -63,7 +67,10 @@ export async function POST(request: NextRequest) {
 
   // A run killed by the serverless timeout never reaches its catch, so its row
   // stays 'running' and the dashboard latches a spinner on it — which also
-  // disables the menu holding Disconnect. Retire any leftovers first.
+  // disables the menu holding Disconnect. Retire the leftovers, but only ones
+  // old enough to be dead: the ceiling is 300s, so anything younger than six
+  // minutes may still be working.
+  const staleBefore = new Date(Date.now() - STALE_JOB_MS).toISOString();
   const { error: staleError } = await admin
     .from("sync_jobs")
     .update({
@@ -72,9 +79,30 @@ export async function POST(request: NextRequest) {
       finished_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
-    .eq("status", "running");
+    .eq("status", "running")
+    .lt("started_at", staleBefore);
   if (staleError) {
     console.error(`[sync] Could not clear stale jobs: ${staleError.message}`);
+  }
+
+  // Whatever is left really is in flight — the daily cron, another tab, or a
+  // dashboard resuming a backlog. Two pipelines racing each other would each
+  // match against their own snapshot of the applications and could insert the
+  // same job twice, so the second caller waits instead.
+  const { data: active } = await admin
+    .from("sync_jobs")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "running")
+    .limit(1)
+    .maybeSingle();
+
+  if (active) {
+    console.log(`[sync] A sync is already running for user ${user.id} — refusing to start a second`);
+    return NextResponse.json(
+      { error: "A sync is already running", code: "already_running", jobId: active.id },
+      { status: 409 }
+    );
   }
 
   const { data: job } = await admin

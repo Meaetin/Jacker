@@ -1,7 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { resolveDb, type Db } from "@/utils/supabase/db";
 import type { Application, ApplicationWithSource, ApplicationStatus } from "@/types/application";
-import { normalizeCompany } from "@/utils/normalize-company";
 import { sanitizeEmailHtml } from "@/lib/email/sanitize-email-html";
 
 interface ApplicationFilters {
@@ -132,40 +131,26 @@ export async function updateApplication(
     .single();
 }
 
-export async function findApplicationByThread(
-  threadId: string,
-  userId: string,
-  db?: Db
-) {
+/**
+ * Every application for a user, with just the columns matching and status
+ * resolution need.
+ *
+ * The ingest pipeline reads this once per run and matches in memory. It used to
+ * ask the database per email — up to four queries each, three of them
+ * `ilike('%company%')`, which a leading wildcard keeps off
+ * `idx_applications_company_role` and turns into a scan of every row the user
+ * has. `updated_at` is selected because it is how the in-memory matcher breaks
+ * a tie between two applications sharing a company and role.
+ */
+export async function listApplicationsForMatching(userId: string, db?: Db) {
   const supabase = await resolveDb(db);
 
   return supabase
     .from("applications")
-    .select()
-    .eq("gmail_thread_id", threadId)
-    .eq("user_id", userId)
-    .maybeSingle();
-}
-
-export async function findApplicationByCompanyRole(
-  company: string,
-  role: string,
-  userId: string,
-  db?: Db
-) {
-  const supabase = await resolveDb(db);
-
-  const normalizedCompany = normalizeCompany(company) ?? company;
-
-  return supabase
-    .from("applications")
-    .select()
-    .ilike("company", `%${normalizedCompany}%`)
-    .ilike("role", `%${role}%`)
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select(
+      "id, company, role, status, gmail_thread_id, application_updated_at, updated_at"
+    )
+    .eq("user_id", userId);
 }
 
 export async function findApplicationsByRole(

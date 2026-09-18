@@ -5,16 +5,20 @@ import type { Db } from "@/utils/supabase/db";
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = "23505";
 
+/**
+ * Stores an email unless it is already there.
+ *
+ * Inserts first and lets the unique index answer the "is it already stored?"
+ * question. `fetchRecentEmails` has already dropped every id it found in
+ * `raw_emails`, so a pre-emptive lookup here came back empty nearly every time
+ * — 150 wasted round trips a run — and the duplicate handling below was doing
+ * the real work anyway.
+ */
 export async function storeIfNew(
   message: GmailMessage,
   userId: string,
   db?: Db
 ): Promise<{ id: string; isNew: boolean }> {
-  const existingId = await findStoredEmailId(message.id, userId, db);
-  if (existingId) {
-    return { id: existingId, isNew: false };
-  }
-
   const { data, error } = await storeRawEmail({
     user_id: userId,
     gmail_message_id: message.id,
@@ -34,8 +38,8 @@ export async function storeIfNew(
   }, db);
 
   if (error) {
-    // Checking then inserting is not atomic, so a second writer can land in
-    // between: Gmail lists the same message on two pages, or two syncs overlap.
+    // Something got there first: Gmail listed the same message on two pages, an
+    // earlier run stored it after this one listed its ids, or two syncs overlap.
     // If the row that beat us is ours, the email is stored and that is fine.
     if (error.code === UNIQUE_VIOLATION) {
       const raced = await findStoredEmailId(message.id, userId, db);

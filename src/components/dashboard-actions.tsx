@@ -13,6 +13,22 @@ interface DashboardActionsProps {
   isDemo?: boolean;
   userId?: string;
   lastSyncAt?: string | null;
+  /** Emails a previous capped run left behind, as recorded by the pipeline. */
+  pendingEmails?: number;
+}
+
+// A sync request handles one capped round of emails. A backlog larger than the
+// cap needs several, so the client keeps calling until the server reports
+// nothing left. The bound is a safety net: without it a server bug that always
+// reported work remaining would spin syncs forever.
+const MAX_SYNC_ROUNDS = 25;
+
+/** Progress across every round of one chain, not just the round in flight. */
+interface SyncChain {
+  /** Emails finished by rounds that have already returned. */
+  done: number;
+  /** The whole backlog, known from the first response: its work plus its leftovers. */
+  total: number;
 }
 
 interface DeleteResult {
@@ -21,7 +37,7 @@ interface DeleteResult {
   parseLogs: number;
 }
 
-export function DashboardActions({ gmailConnected, isDemo = false, userId, lastSyncAt = null }: DashboardActionsProps) {
+export function DashboardActions({ gmailConnected, isDemo = false, userId, lastSyncAt = null, pendingEmails = 0 }: DashboardActionsProps) {
   const job = useSyncJob(userId);
   // After a sync finishes this session, reflect its time without a refresh.
   const effectiveLastSync =
@@ -33,6 +49,7 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   const [syncFromDate, setSyncFromDate] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [syncDone, setSyncDone] = useState<SyncJob | null>(null);
+  const [chain, setChain] = useState<SyncChain | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
@@ -44,13 +61,26 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const handledJobRef = useRef<string | null>(null);
+  // True while more rounds are still coming, so the toast waits for the last one.
+  const chainingRef = useRef(false);
+  // Auto-resume is a once-per-mount decision, not something to retry on rerender.
+  const resumedRef = useRef(false);
 
   const syncing = starting || job?.status === "running";
   const busy = syncing || deleting;
 
+  // Mid-chain the job row only knows about its own round, so its numbers would
+  // restart at zero every 100 emails. Offset them by what earlier rounds did.
+  const inRound = job?.status === "running" ? job.processed : 0;
+  const progress = chain
+    ? { processed: chain.done + inRound, total: chain.total }
+    : job?.status === "running" && job.total > 0
+      ? { processed: job.processed, total: job.total }
+      : null;
+
   const syncLabel =
-    job?.status === "running" && job.total > 0
-      ? `Parsing ${job.processed}/${job.total}…`
+    syncing && progress
+      ? `Parsing ${progress.processed}/${progress.total}…`
       : syncing
         ? "Syncing…"
         : deleting
@@ -63,6 +93,9 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     const key = `${job.id}:${job.status}`;
     if (handledJobRef.current === key) return;
     handledJobRef.current = key;
+    // Every round but the last finishes "done" while the chain continues.
+    // handleSync raises the one toast, once the whole backlog is drained.
+    if (chainingRef.current && job.status === "done") return;
     setStarting(false);
     if (job.status === "error") {
       setSyncError(job.error || "Sync failed");
@@ -82,6 +115,20 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     return () => clearTimeout(timer);
   }, [syncDone, deleteResult, syncError, deleteError]);
 
+  // A big first sync runs as a chain of capped rounds. If the user closes the
+  // tab partway through, the pipeline has already recorded what it did not
+  // reach — so pick the backlog up here rather than leaving it to the daily
+  // cron, which would take days to drain it.
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (pendingEmails <= 0 || !gmailConnected || isDemo) return;
+    resumedRef.current = true;
+    void handleSync();
+    // handleSync is stable for the life of the component and this must fire
+    // once on mount, so it deliberately does not re-run as state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEmails, gmailConnected, isDemo]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -98,37 +145,75 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     setSyncDone(null);
     setSyncError(null);
     setNeedsReconnect(false);
+    setChain(null);
+    chainingRef.current = true;
+
+    const body: { fromDate?: string } = {};
+    if (syncFromDate) body.fromDate = syncFromDate;
+
+    // Totals for the whole chain. The per-round response only describes its own
+    // round, and the toast should report the sync the user actually asked for.
+    let done = 0;
+    let newApplications = 0;
+    let updatedApplications = 0;
+    let lastJobId: string | undefined;
 
     try {
-      const body: { fromDate?: string } = {};
-      if (syncFromDate) body.fromDate = syncFromDate;
+      for (let round = 0; round < MAX_SYNC_ROUNDS; round++) {
+        const res = await fetch("/api/emails/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
 
-      const res = await fetch("/api/emails/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
+        if (!res.ok) {
+          // Another tab, or the cron, already holds the sync. That run will
+          // drain the same backlog, so bow out quietly rather than alarming
+          // the user about a conflict they did not cause.
+          if (res.status === 409) return;
 
-      if (!res.ok) {
-        setSyncError(data.error || "Sync failed");
-        // A dead refresh token is only fixable by re-authorising, and there is
-        // no other route to it: "Connect Gmail" renders only when no token row
-        // exists, and a broken token still counts as connected.
-        setNeedsReconnect(data.code === "gmail_auth");
-        return;
+          setSyncError(data.error || "Sync failed");
+          // A dead refresh token is only fixable by re-authorising, and there is
+          // no other route to it: "Connect Gmail" renders only when no token row
+          // exists, and a broken token still counts as connected.
+          setNeedsReconnect(data.code === "gmail_auth");
+          return;
+        }
+
+        const fetched = data.fetched ?? 0;
+        const remaining = data.remaining ?? 0;
+        done += fetched;
+        newApplications += data.newApplications ?? 0;
+        updatedApplications += data.updatedApplications ?? 0;
+        lastJobId = data.jobId;
+
+        // Only the first response can size the backlog: what this round took
+        // plus what the cap left behind. Later rounds just advance the count.
+        setChain((current) =>
+          current ? { done, total: current.total } : { done, total: done + remaining }
+        );
+
+        if (remaining === 0) break;
+
+        // A round that took nothing yet still reports work left is not shrinking
+        // the backlog. Looping would hammer the same window, so stop and let the
+        // toast report what did get through.
+        if (fetched === 0) break;
       }
 
-      // The request resolves only when the pipeline finishes. Build a final
-      // snapshot from the response so the toast works even if Realtime is down,
-      // and mark it handled so the Realtime "done" event doesn't double-toast.
+      chainingRef.current = false;
+
+      // The requests resolve only once their pipeline finishes, so these totals
+      // are final. Building the snapshot here means the toast works even if
+      // Realtime is down, and marking it handled stops a double-toast.
       const doneJob: SyncJob = {
-        id: data.jobId ?? "local",
+        id: lastJobId ?? "local",
         status: "done",
-        total: data.fetched ?? 0,
-        processed: data.fetched ?? 0,
-        new_applications: data.newApplications ?? 0,
-        updated_applications: data.updatedApplications ?? 0,
+        total: done,
+        processed: done,
+        new_applications: newApplications,
+        updated_applications: updatedApplications,
         error: null,
         started_at: "",
         finished_at: null,
@@ -138,7 +223,9 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     } catch {
       setSyncError("Network error — check your connection and try again");
     } finally {
+      chainingRef.current = false;
       setStarting(false);
+      setChain(null);
     }
   }
 

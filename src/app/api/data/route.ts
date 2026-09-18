@@ -71,7 +71,7 @@ export async function DELETE() {
   // than the data just deleted, so none of it would come back.
   const { error: watermarkError } = await admin
     .from("user_tokens")
-    .update({ last_sync_at: null })
+    .update({ last_sync_at: null, pending_emails: 0 })
     .eq("user_id", user.id);
 
   if (watermarkError) {

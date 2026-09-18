@@ -1,4 +1,5 @@
 import { findExistingApplication } from "./match-application";
+import { toMatchable, type ApplicationIndex } from "./application-index";
 import { shouldApplyStatus } from "./resolve-status-update";
 import type { Db } from "@/utils/supabase/db";
 import { updateApplication, insertApplication } from "@/lib/db/applications";
@@ -50,6 +51,7 @@ export async function upsertApplication(
   threadId: string | null,
   userId: string,
   receivedAt: string | null,
+  index: ApplicationIndex,
   db?: Db
 ): Promise<{ data: unknown; outcome: UpsertOutcome }> {
   const companyFromSubject = parseResult.company_from_subject ?? null;
@@ -58,14 +60,13 @@ export async function upsertApplication(
   const role = parseResult.role ?? null;
   const status = (parseResult.status as ApplicationStatus) ?? "unknown";
 
-  const existing = await findExistingApplication(
+  const existing = findExistingApplication(
+    index,
     threadId,
     companyFromSubject,
     companyFromBody,
     companyFromEmail,
-    role,
-    userId,
-    db
+    role
   );
 
   // No reliable identity — skip to avoid orphaned entries
@@ -81,7 +82,7 @@ export async function upsertApplication(
     const decision = shouldApplyStatus({
       incomingStatus: status,
       incomingReceivedAt: receivedAt,
-      existingStatus: existing.status as ApplicationStatus,
+      existingStatus: existing.status,
       existingUpdatedAt: existing.application_updated_at,
     });
 
@@ -126,6 +127,10 @@ export async function upsertApplication(
       ...(role && role !== existing.role ? { role } : {}),
     }, db);
     if (error) throw new Error(error.message);
+
+    // Fold the new state back in, so an email later in this run resolves its
+    // status against what this write just set rather than the stale snapshot.
+    if (data) index.record(toMatchable(data));
     return { data, outcome: "updated" };
   }
 
@@ -147,5 +152,9 @@ export async function upsertApplication(
     application_updated_at: receivedAt,
   }, db);
   if (error) throw new Error(error.message);
+
+  // Without this a second email for the same job would find nothing and insert
+  // a duplicate — the database lookup this replaced would have seen the row.
+  if (data) index.record(toMatchable(data));
   return { data, outcome: "inserted" };
 }

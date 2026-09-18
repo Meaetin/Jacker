@@ -52,6 +52,8 @@ interface ApplicationsContentProps {
   userId: string;
   gmailConnected: boolean;
   lastSyncAt: string | null;
+  /** Emails a capped sync left for a later run. */
+  pendingEmails: number;
   isDemo?: boolean;
   initialView: "table" | "kanban";
   initialStatus: string;
@@ -66,6 +68,7 @@ export function ApplicationsContent({
   userId,
   gmailConnected,
   lastSyncAt,
+  pendingEmails,
   isDemo = false,
   initialView,
   initialStatus,
@@ -446,7 +449,7 @@ export function ApplicationsContent({
             onSearchChange={handleSearchChange}
           />
         </div>
-        <DashboardActions gmailConnected={true} isDemo={isDemo} userId={userId} lastSyncAt={lastSyncAt} />
+        <DashboardActions gmailConnected={true} isDemo={isDemo} userId={userId} lastSyncAt={lastSyncAt} pendingEmails={pendingEmails} />
       </div>
       {view === "kanban" ? (
         <KanbanBoard

@@ -22,7 +22,10 @@ Rules:
 - Keep email_type limited to: application_update, interview_invitation, rejection, offer, assessment, job_alert, application_viewed, recruiter_outreach, other.
 - status_confidence must be a number between 0 and 1.
 - Infer the status and email_type from the email meaning, not only exact keywords.
-- Use email_type "application_viewed" for automated notifications that your application was viewed, received, or is being reviewed — these are low-signal auto-replies and should not be treated as status updates.
+- Use email_type "application_viewed" ONLY for notifications that someone opened or looked at an application already submitted, where the email reports no progress — for example "Your application was viewed by Acme" or "A recruiter viewed your profile". Still set email_type to "application_viewed" for these; set status to "unknown".
+- On a received email, a confirmation that an application arrived is NOT "application_viewed" (mail the user sent is covered by the Direction rules below, and keeps email_type "application_sent"). "Thanks for applying to Acme", "We have received your application", "We've received your resume", "Your application was sent to Acme", "Application received", "Receipt of your online application", "Thank you for your interest" and the like are the first proof the user applied.
+- For every one of those confirmations set email_type to "application_update" and status to "applied". Never "unknown": the email is itself the evidence the application exists, so the status is known even when the email describes no further progress.
+- When in doubt between the two, choose "application_update". A confirmation misfiled as "application_viewed" is discarded and the application is never recorded.
 - Use email_type "job_alert" for job recommendation emails, job board digest emails, or job suggestions.
 - Use email_type "recruiter_outreach" for cold outreach from recruiters or staffing agencies on behalf of a client.
 - For "company_from_subject": extract the hiring company name as explicitly stated in the subject line. For job board emails (e.g. "Your application to Engineer at Stripe via LinkedIn"), extract the actual employer ("Stripe"), not the job board. Use null if not clearly stated.
@@ -38,4 +41,4 @@ Direction:
 - For a sent email, set status to "applied" unless the body clearly says otherwise, and set email_type to "application_sent".
 - A sent email is only job-related if the user is applying for a role, following up on an application, or replying to a recruiter. Ordinary mail the user sent to colleagues or friends is not job-related, even if it mentions words like interview, offer or thanks.`;
 
-export const PROMPT_VERSION = "v6";
+export const PROMPT_VERSION = "v9";

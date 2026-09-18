@@ -89,7 +89,7 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
       : { status, search, page: 1, limit: PAGE_SIZE };
 
   const [{ data: tokens }, { data: applications, count }, stats, columnOrder] = await Promise.all([
-    createAdminClient().from("user_tokens").select("user_id, last_sync_at").eq("user_id", userId).maybeSingle(),
+    createAdminClient().from("user_tokens").select("user_id, last_sync_at, pending_emails").eq("user_id", userId).maybeSingle(),
     getApplications(userId, listFilters),
     getApplicationStats(userId),
     getKanbanColumnOrder(userId),
@@ -97,6 +97,8 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
 
   const gmailConnected = !!tokens;
   const lastSyncAt = tokens?.last_sync_at ?? null;
+  // Emails a capped run left behind, so the dashboard can finish the job.
+  const pendingEmails = tokens?.pending_emails ?? 0;
 
   return (
     <ApplicationsContent
@@ -106,6 +108,7 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
       userId={userId}
       gmailConnected={gmailConnected}
       lastSyncAt={lastSyncAt}
+      pendingEmails={pendingEmails}
       isDemo={isDemo}
       initialView={initialView}
       initialStatus={params.status ?? ""}

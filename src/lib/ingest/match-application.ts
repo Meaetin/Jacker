@@ -1,71 +1,60 @@
-import {
-  findApplicationByThread,
-  findApplicationByCompanyRole,
-} from "@/lib/db/applications";
-import type { Application } from "@/types/application";
-import type { Db } from "@/utils/supabase/db";
+import type { ApplicationIndex, MatchableApplication } from "./application-index";
 
 const tag = "[match]";
 
-export async function findExistingApplication(
+/**
+ * Finds the application an email belongs to, in the order the signals can be
+ * trusted: the Gmail thread first, then role paired with each of the three
+ * places the parser can find a company.
+ *
+ * Reads the run's in-memory index rather than the database. The tiers, their
+ * order and their matching rules are unchanged — a company matches when the
+ * stored name contains the parsed one, case-insensitively, exactly as the
+ * `ilike('%company%')` queries this replaced did.
+ */
+export function findExistingApplication(
+  index: ApplicationIndex,
   threadId: string | null,
   companyFromSubject: string | null,
   companyFromBody: string | null,
   companyFromEmail: string | null,
-  role: string | null,
-  userId: string,
-  db?: Db
-): Promise<Application | null> {
+  role: string | null
+): MatchableApplication | null {
   console.log(
     `${tag} Matching — threadId: ${threadId ?? "none"} | company_from_subject: "${companyFromSubject ?? "null"}" | company_from_body: "${companyFromBody ?? "null"}" | company_from_email: "${companyFromEmail ?? "null"}" | role: "${role ?? "null"}"`
   );
 
   // 1. Thread ID — most reliable signal
   if (threadId) {
-    const { data: threadMatch } = await findApplicationByThread(threadId, userId, db);
+    const threadMatch = index.byThread(threadId);
     if (threadMatch) {
       console.log(
         `${tag} ✓ Matched by thread ID → "${threadMatch.company} - ${threadMatch.role}" (id: ${threadMatch.id})`
       );
-      return threadMatch as Application;
+      return threadMatch;
     }
     console.log(`${tag} ✗ No thread match`);
   }
 
-  // 2. role + company extracted from subject line
-  if (companyFromSubject && role) {
-    const { data: subjectMatch } = await findApplicationByCompanyRole(companyFromSubject, role, userId, db);
-    if (subjectMatch) {
-      console.log(
-        `${tag} ✓ Matched by company_from_subject + role → "${subjectMatch.company} - ${subjectMatch.role}" (id: ${subjectMatch.id})`
-      );
-      return subjectMatch as Application;
-    }
-    console.log(`${tag} ✗ No match for company_from_subject "${companyFromSubject}" / role "${role}"`);
-  }
+  const tiers: [label: string, company: string | null][] = [
+    ["company_from_subject", companyFromSubject],
+    ["company_from_body", companyFromBody],
+    ["company_from_email", companyFromEmail],
+  ];
 
-  // 3. role + company extracted from email body
-  if (companyFromBody && role) {
-    const { data: bodyMatch } = await findApplicationByCompanyRole(companyFromBody, role, userId, db);
-    if (bodyMatch) {
-      console.log(
-        `${tag} ✓ Matched by company_from_body + role → "${bodyMatch.company} - ${bodyMatch.role}" (id: ${bodyMatch.id})`
-      );
-      return bodyMatch as Application;
-    }
-    console.log(`${tag} ✗ No match for company_from_body "${companyFromBody}" / role "${role}"`);
-  }
+  // 2-4. role + company, taking the company from the subject, then the body,
+  // then the sender address.
+  for (const [label, company] of tiers) {
+    if (!company || !role) continue;
 
-  // 4. role + company inferred from sender address
-  if (companyFromEmail && role) {
-    const { data: emailMatch } = await findApplicationByCompanyRole(companyFromEmail, role, userId, db);
-    if (emailMatch) {
+    const match = index.byCompanyRole(company, role);
+    if (match) {
       console.log(
-        `${tag} ✓ Matched by company_from_email + role → "${emailMatch.company} - ${emailMatch.role}" (id: ${emailMatch.id})`
+        `${tag} ✓ Matched by ${label} + role → "${match.company} - ${match.role}" (id: ${match.id})`
       );
-      return emailMatch as Application;
+      return match;
     }
-    console.log(`${tag} ✗ No match for company_from_email "${companyFromEmail}" / role "${role}"`);
+    console.log(`${tag} ✗ No match for ${label} "${company}" / role "${role}"`);
   }
 
   console.log(`${tag} ✗ No match found — will insert as new application`);
