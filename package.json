@@ -6,8 +6,9 @@
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "extract-job": "node scripts/extract-job.mjs"
+    "lint": "next lint && eslint chrome-extension",
+    "extract-job": "node scripts/extract-job.mjs",
+    "verify:autofill": "node scripts/verify-autofill-matcher.mjs && node scripts/verify-profile-mapping.mjs && node scripts/verify-profile-merge.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -96,6 +96,7 @@ const optionalString = z.string().trim().optional().default("");
 export const candidateProfileDataSchema = z.object({
   candidate: z.object({
     full_name: optionalString,
+    preferred_name: optionalString,
     email: optionalString,
     phone: optionalString,
     location: optionalString,
@@ -106,9 +107,13 @@ export const candidateProfileDataSchema = z.object({
   }),
   personal_details: z.object({
     address: optionalString,
+    address_line_2: optionalString,
     city: optionalString,
+    state: optionalString,
     postal_code: optionalString,
     country: optionalString,
+    phone_country_code: optionalString,
+    phone_device_type: optionalString,
     citizenship: optionalString,
     work_authorization: optionalString,
     current_occupation: optionalString,
@@ -142,6 +147,7 @@ export const candidateProfileDataSchema = z.object({
       }),
     )
     .default([]),
+  skills: z.array(z.string()).default([]),
   ai_summary: optionalString,
 });
 

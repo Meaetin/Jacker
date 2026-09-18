@@ -1,4 +1,5 @@
 const extractBtn = document.getElementById("extract-btn");
+const autofillBtn = document.getElementById("autofill-btn");
 const statusEl = document.getElementById("status");
 const currentUrlEl = document.getElementById("current-url");
 
@@ -63,4 +64,19 @@ extractBtn.addEventListener("click", async () => {
     extractBtn.disabled = false;
     extractBtn.textContent = "Extract & Send to Job Tracker";
   }
+});
+
+// The run itself belongs to the background script, so the popup can get out of
+// the way immediately — it would otherwise cover the form it is filling.
+//
+// Waiting for the acknowledgement matters: closing the window in the same tick
+// as the send tears down this context before Chrome dispatches the message, and
+// the run never starts.
+autofillBtn.addEventListener("click", async () => {
+  try {
+    await chrome.runtime.sendMessage({ type: "start_autofill" });
+  } catch (err) {
+    console.error("[Job Tracker] Could not start autofill:", err);
+  }
+  window.close();
 });

@@ -47,8 +47,15 @@ export async function updateSession(request: NextRequest) {
     !pathname.startsWith("/api/auth/") &&
     !pathname.startsWith("/api/cron/");
 
-  // Not signed in → keep them out of protected pages and API routes
-  if (!user && (isProtectedPage || isApiRoute)) {
+  // Not signed in → API callers get a 401 they can act on. Redirecting them to
+  // the login page instead sends back an HTML document, which any fetch caller
+  // then fails to parse as JSON.
+  if (!user && isApiRoute) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Not signed in → keep them out of protected pages
+  if (!user && isProtectedPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

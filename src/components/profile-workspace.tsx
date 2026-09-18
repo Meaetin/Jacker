@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Plus, Trash2, LoaderCircle, Sparkles, FileText } from "lucide-react";
+import { Plus, Trash2, LoaderCircle, Sparkles, FileText, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type {
   CandidateProfileData,
@@ -48,6 +48,136 @@ const RELOCATE_OPTIONS = [
   { value: "No", label: "No" },
   { value: "Open to discussion", label: "Open to discussion" },
 ];
+
+// Workday and its lookalikes make "which kind of number is this?" a mandatory
+// question next to the phone field, using exactly these labels.
+const PHONE_DEVICE_OPTIONS = [
+  { value: "Mobile", label: "Mobile" },
+  { value: "Home", label: "Home" },
+  { value: "Work", label: "Work" },
+];
+
+function UpdatedBadge({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span className="updated-badge rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+      Updated from CV
+    </span>
+  );
+}
+
+// Covers the editable sections while a CV is being read. The fields stay
+// mounted underneath: blanking them first meant a failed upload took the user's
+// hand-entered values with it.
+function GeneratingCurtain() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="generating-curtain absolute inset-0 z-10 flex items-start justify-center rounded-lg bg-surface/80 backdrop-blur-sm"
+    >
+      <div className="generating-curtain-message sticky top-24 flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-text-secondary shadow-sm">
+        <LoaderCircle className="size-4 animate-spin text-brand" />
+        Reading your CV — your saved details are kept
+      </div>
+    </motion.div>
+  );
+}
+
+function SkillsEditor({
+  skills,
+  onChange,
+  disabled,
+}: {
+  skills: string[];
+  onChange: (value: string[]) => void;
+  disabled: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+
+  // Accepts either one skill or a pasted comma separated list, because people
+  // paste a whole line off their CV as often as they type one at a time.
+  function commit(raw: string) {
+    const additions = raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (!additions.length) return;
+
+    const existing = new Set(skills.map((skill) => skill.toLowerCase()));
+    const merged = [...skills];
+
+    for (const skill of additions) {
+      if (existing.has(skill.toLowerCase())) continue;
+      existing.add(skill.toLowerCase());
+      merged.push(skill);
+    }
+
+    onChange(merged);
+    setDraft("");
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      commit(draft);
+      return;
+    }
+    // Backspace on an empty box removes the last chip, as token inputs do.
+    if (event.key === "Backspace" && !draft && skills.length) {
+      onChange(skills.slice(0, -1));
+    }
+  }
+
+  return (
+    <div className="skills-editor space-y-3">
+      {skills.length > 0 && (
+        <div className="skills-chip-list flex flex-wrap gap-2">
+          <AnimatePresence initial={false}>
+            {skills.map((skill) => (
+              <motion.span
+                key={skill}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="skills-chip inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-text-primary"
+              >
+                {skill}
+                {!disabled && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${skill}`}
+                    className="skills-chip-remove text-text-muted transition-colors hover:text-status-rejected"
+                    onClick={() => onChange(skills.filter((entry) => entry !== skill))}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </motion.span>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+      <Input
+        label="Add skills"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => commit(draft)}
+        placeholder="TypeScript, React, PostgreSQL"
+        disabled={disabled}
+      />
+      <p className="skills-editor-hint text-xs text-text-muted">
+        Press Enter or type a comma to add. Application forms ask for these either as
+        one comma separated list or one at a time.
+      </p>
+    </div>
+  );
+}
 
 function EducationEditor({
   entries,
@@ -184,6 +314,9 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Dotted paths the last CV upload changed, so the user can see what moved
+  // instead of re-reading the whole form. Cleared on the next save or upload.
+  const [changedFields, setChangedFields] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -208,6 +341,29 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
 
   function updateProfile(path: keyof CandidateProfileData, value: CandidateProfileData[keyof CandidateProfileData]) {
     setProfileData((prev) => ({ ...prev, [path]: value }));
+  }
+
+  // Marks a field the last CV upload filled in. Editing it clears the mark, so
+  // the highlight only ever points at values the user has not looked at yet.
+  function updatedMark(path: string) {
+    if (!changedFields.has(path)) return {};
+    return {
+      className: "profile-field-updated ring-2 ring-brand/40",
+      onFocus: () => clearMark(path),
+    };
+  }
+
+  function clearMark(path: string) {
+    setChangedFields((prev) => {
+      if (!prev.has(path)) return prev;
+      const next = new Set(prev);
+      next.delete(path);
+      return next;
+    });
+  }
+
+  function sectionUpdated(path: string) {
+    return changedFields.has(path);
   }
 
   function updateCandidateField(field: keyof CandidateProfileData["candidate"], value: string) {
@@ -263,10 +419,11 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
     setUploading(true);
     setUploadError(null);
     setSuccessMessage(null);
+    setChangedFields(new Set());
 
-    // Clear stale data while the new CV is being processed
-    setCvMarkdown("");
-    setProfileData(DEFAULT_PROFILE_DATA);
+    // The form deliberately keeps its current values here. Clearing it first
+    // threw away anything hand-entered the moment an upload failed, and the CV
+    // is merged into the profile rather than replacing it anyway.
 
     try {
       const payload = new FormData();
@@ -285,13 +442,20 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
 
       const generated = data.profile as CandidateProfileRecord;
       const generatedMarkdown = generated.cv_markdown ?? "";
+      const updatedPaths: string[] = data.changed_fields ?? [];
+
       setCvMarkdown(generatedMarkdown);
       setProfileData(generated.profile_data);
       // Upload persists immediately, so move the saved baseline forward.
       setSavedCvMarkdown(generatedMarkdown);
       setSavedProfileData(generated.profile_data);
       setUpdatedAt(generated.updated_at ?? null);
-      setSuccessMessage("CV uploaded and profile generated.");
+      setChangedFields(new Set(updatedPaths));
+      setSuccessMessage(
+        updatedPaths.length
+          ? `CV read. ${updatedPaths.length} ${updatedPaths.length === 1 ? "field" : "fields"} updated, highlighted below. Nothing else was touched.`
+          : "CV read. Nothing in it was newer than what you already have.",
+      );
     } catch {
       setUploadError("Upload failed due to a network error.");
     } finally {
@@ -326,6 +490,8 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
       setProfileData(saved.profile_data);
       setSavedProfileData(saved.profile_data);
       setUpdatedAt(saved.updated_at ?? null);
+      // Saving means the user has been through the changes; stop flagging them.
+      setChangedFields(new Set());
       setSuccessMessage("Profile saved.");
     } catch {
       setSaveError("Save failed due to a network error.");
@@ -432,6 +598,9 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
         {successMessage && <p className="text-sm text-status-offer">{successMessage}</p>}
       </div>
 
+      <div className="profile-sections relative space-y-6">
+        <AnimatePresence>{uploading && <GeneratingCurtain />}</AnimatePresence>
+
       <div className="cv-markdown-section card space-y-3">
         <div className="cv-markdown-header space-y-1">
           <h2 className="font-display text-lg font-semibold text-text-primary">CV Markdown</h2>
@@ -453,14 +622,15 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
       <div className="candidate-info-section card space-y-4">
         <h2 className="font-display text-lg font-semibold text-text-primary">Candidate</h2>
         <div className="candidate-fields-grid grid gap-3 sm:grid-cols-2">
-          <Input label="Full name" value={profileData.candidate.full_name} onChange={(e) => updateCandidateField("full_name", e.target.value)} disabled={isDemo} />
-          <Input label="Email" value={profileData.candidate.email} onChange={(e) => updateCandidateField("email", e.target.value)} disabled={isDemo} />
-          <Input label="Phone" value={profileData.candidate.phone} onChange={(e) => updateCandidateField("phone", e.target.value)} disabled={isDemo} />
-          <Input label="Location" value={profileData.candidate.location} onChange={(e) => updateCandidateField("location", e.target.value)} disabled={isDemo} />
-          <Input label="LinkedIn" value={profileData.candidate.linkedin} onChange={(e) => updateCandidateField("linkedin", e.target.value)} disabled={isDemo} />
-          <Input label="Portfolio" value={profileData.candidate.portfolio_url} onChange={(e) => updateCandidateField("portfolio_url", e.target.value)} disabled={isDemo} />
-          <Input label="GitHub" value={profileData.candidate.github} onChange={(e) => updateCandidateField("github", e.target.value)} disabled={isDemo} />
-          <Input label="Twitter/X" value={profileData.candidate.twitter} onChange={(e) => updateCandidateField("twitter", e.target.value)} disabled={isDemo} />
+          <Input label="Full name" value={profileData.candidate.full_name} onChange={(e) => updateCandidateField("full_name", e.target.value)} disabled={isDemo} {...updatedMark("candidate.full_name")} />
+          <Input label="Preferred name" value={profileData.candidate.preferred_name} onChange={(e) => updateCandidateField("preferred_name", e.target.value)} placeholder="The name you go by" disabled={isDemo} {...updatedMark("candidate.preferred_name")} />
+          <Input label="Email" value={profileData.candidate.email} onChange={(e) => updateCandidateField("email", e.target.value)} disabled={isDemo} {...updatedMark("candidate.email")} />
+          <Input label="Phone" value={profileData.candidate.phone} onChange={(e) => updateCandidateField("phone", e.target.value)} disabled={isDemo} {...updatedMark("candidate.phone")} />
+          <Input label="Location" value={profileData.candidate.location} onChange={(e) => updateCandidateField("location", e.target.value)} disabled={isDemo} {...updatedMark("candidate.location")} />
+          <Input label="LinkedIn" value={profileData.candidate.linkedin} onChange={(e) => updateCandidateField("linkedin", e.target.value)} disabled={isDemo} {...updatedMark("candidate.linkedin")} />
+          <Input label="Portfolio" value={profileData.candidate.portfolio_url} onChange={(e) => updateCandidateField("portfolio_url", e.target.value)} disabled={isDemo} {...updatedMark("candidate.portfolio_url")} />
+          <Input label="GitHub" value={profileData.candidate.github} onChange={(e) => updateCandidateField("github", e.target.value)} disabled={isDemo} {...updatedMark("candidate.github")} />
+          <Input label="Twitter/X" value={profileData.candidate.twitter} onChange={(e) => updateCandidateField("twitter", e.target.value)} disabled={isDemo} {...updatedMark("candidate.twitter")} />
         </div>
       </div>
 
@@ -470,22 +640,29 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
           Details that commonly appear on job application forms.
         </p>
         <div className="personal-details-grid grid gap-3 sm:grid-cols-2">
-          <Input label="Address" value={profileData.personal_details.address} onChange={(e) => updatePersonalField("address", e.target.value)} disabled={isDemo} />
-          <Input label="City" value={profileData.personal_details.city} onChange={(e) => updatePersonalField("city", e.target.value)} disabled={isDemo} />
-          <Input label="Postal code" value={profileData.personal_details.postal_code} onChange={(e) => updatePersonalField("postal_code", e.target.value)} disabled={isDemo} />
-          <Input label="Country" value={profileData.personal_details.country} onChange={(e) => updatePersonalField("country", e.target.value)} disabled={isDemo} />
-          <Input label="Citizenship" value={profileData.personal_details.citizenship} onChange={(e) => updatePersonalField("citizenship", e.target.value)} disabled={isDemo} />
-          <Input label="Work authorization" value={profileData.personal_details.work_authorization} onChange={(e) => updatePersonalField("work_authorization", e.target.value)} placeholder="Citizen / PR / Requires sponsorship" disabled={isDemo} />
-          <Input label="Current occupation" value={profileData.personal_details.current_occupation} onChange={(e) => updatePersonalField("current_occupation", e.target.value)} disabled={isDemo} />
-          <Input label="Notice period" value={profileData.personal_details.notice_period} onChange={(e) => updatePersonalField("notice_period", e.target.value)} placeholder="Immediate / 1 month" disabled={isDemo} />
+          <Input label="Address" value={profileData.personal_details.address} onChange={(e) => updatePersonalField("address", e.target.value)} placeholder="Street address" disabled={isDemo} {...updatedMark("personal_details.address")} />
+          <Input label="Address line 2" value={profileData.personal_details.address_line_2} onChange={(e) => updatePersonalField("address_line_2", e.target.value)} placeholder="Unit / block" disabled={isDemo} {...updatedMark("personal_details.address_line_2")} />
+          <Input label="City" value={profileData.personal_details.city} onChange={(e) => updatePersonalField("city", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.city")} />
+          <Input label="State / province" value={profileData.personal_details.state} onChange={(e) => updatePersonalField("state", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.state")} />
+          <Input label="Postal code" value={profileData.personal_details.postal_code} onChange={(e) => updatePersonalField("postal_code", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.postal_code")} />
+          <Input label="Country" value={profileData.personal_details.country} onChange={(e) => updatePersonalField("country", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.country")} />
+          <Input label="Phone country code" value={profileData.personal_details.phone_country_code} onChange={(e) => updatePersonalField("phone_country_code", e.target.value)} placeholder="+65" disabled={isDemo} {...updatedMark("personal_details.phone_country_code")} />
+          <Select label="Phone device type" options={PHONE_DEVICE_OPTIONS} value={profileData.personal_details.phone_device_type} onChange={(e) => updatePersonalField("phone_device_type", e.target.value)} disabled={isDemo} />
+          <Input label="Citizenship" value={profileData.personal_details.citizenship} onChange={(e) => updatePersonalField("citizenship", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.citizenship")} />
+          <Input label="Work authorization" value={profileData.personal_details.work_authorization} onChange={(e) => updatePersonalField("work_authorization", e.target.value)} placeholder="Citizen / PR / Requires sponsorship" disabled={isDemo} {...updatedMark("personal_details.work_authorization")} />
+          <Input label="Current occupation" value={profileData.personal_details.current_occupation} onChange={(e) => updatePersonalField("current_occupation", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.current_occupation")} />
+          <Input label="Notice period" value={profileData.personal_details.notice_period} onChange={(e) => updatePersonalField("notice_period", e.target.value)} placeholder="Immediate / 1 month" disabled={isDemo} {...updatedMark("personal_details.notice_period")} />
           <Select label="Willing to relocate" options={RELOCATE_OPTIONS} value={profileData.personal_details.willing_to_relocate} onChange={(e) => updatePersonalField("willing_to_relocate", e.target.value)} disabled={isDemo} />
-          <Input label="Date of birth" value={profileData.personal_details.date_of_birth} onChange={(e) => updatePersonalField("date_of_birth", e.target.value)} placeholder="1995-04-21" disabled={isDemo} />
-          <Input label="Gender" value={profileData.personal_details.gender} onChange={(e) => updatePersonalField("gender", e.target.value)} disabled={isDemo} />
+          <Input label="Date of birth" value={profileData.personal_details.date_of_birth} onChange={(e) => updatePersonalField("date_of_birth", e.target.value)} placeholder="1995-04-21" disabled={isDemo} {...updatedMark("personal_details.date_of_birth")} />
+          <Input label="Gender" value={profileData.personal_details.gender} onChange={(e) => updatePersonalField("gender", e.target.value)} disabled={isDemo} {...updatedMark("personal_details.gender")} />
         </div>
       </div>
 
       <div className="education-section card space-y-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Education</h2>
+        <div className="education-header flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-text-primary">Education</h2>
+          <UpdatedBadge show={sectionUpdated("education")} />
+        </div>
         <EducationEditor
           entries={profileData.education}
           onChange={(entries) => updateProfile("education", entries)}
@@ -494,10 +671,25 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
       </div>
 
       <div className="work-experience-section card space-y-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Work Experience</h2>
+        <div className="work-experience-header flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-text-primary">Work Experience</h2>
+          <UpdatedBadge show={sectionUpdated("work_experience")} />
+        </div>
         <WorkExperienceEditor
           entries={profileData.work_experience}
           onChange={(entries) => updateProfile("work_experience", entries)}
+          disabled={isDemo}
+        />
+      </div>
+
+      <div className="skills-section card space-y-4">
+        <div className="skills-header flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-text-primary">Skills</h2>
+          <UpdatedBadge show={sectionUpdated("skills")} />
+        </div>
+        <SkillsEditor
+          skills={profileData.skills}
+          onChange={(skills) => updateProfile("skills", skills)}
           disabled={isDemo}
         />
       </div>
@@ -532,6 +724,7 @@ export function ProfileWorkspace({ initialProfile, isDemo = false }: ProfileWork
           placeholder="Upload a CV or click Regenerate to generate a summary."
           disabled={isDemo}
         />
+      </div>
       </div>
 
       {!isDemo && (

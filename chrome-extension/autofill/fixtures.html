@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Autofill test fixtures</title>
+    <style>
+      body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+             max-width: 640px; margin: 32px auto; padding: 0 16px; color: #111827; }
+      h1 { font-size: 20px; } h2 { font-size: 15px; margin-top: 28px; }
+      p.hint { color: #6b7280; font-size: 13px; }
+      .field { margin: 10px 0; }
+      label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+      input, select, textarea { width: 100%; padding: 6px 8px; border: 1px solid #d1d5db;
+                                border-radius: 5px; font: inherit; }
+      button { padding: 6px 12px; border: 1px solid #d1d5db; background: #f9fafb;
+               border-radius: 5px; font: inherit; cursor: pointer; }
+      .combo { position: relative; }
+      .combo-input { cursor: pointer; background: #fff; }
+      .combo-menu { position: absolute; z-index: 10; left: 0; right: 0; background: #fff;
+                    border: 1px solid #d1d5db; border-radius: 5px; margin-top: 2px;
+                    max-height: 160px; overflow: auto; display: none; }
+      .combo-menu[data-open="true"] { display: block; }
+      .combo-option { padding: 6px 8px; cursor: pointer; }
+      .combo-option:hover { background: #eff6ff; }
+      fieldset { border: 1px solid #e5e7eb; border-radius: 6px; margin: 10px 0; padding: 10px 12px; }
+      legend { font-size: 12px; color: #6b7280; padding: 0 4px; }
+    </style>
+  </head>
+  <body>
+    <h1>Autofill test fixtures</h1>
+    <p class="hint">
+      Open this file in Chrome with the extension loaded, then click
+      <strong>Autofill this application</strong>. It reproduces the form patterns that
+      break naive autofillers, without applying to a real job.
+    </p>
+    <p class="hint">
+      A correct run fills sections 1–5 and 7 from your profile, leaves
+      <em>Confirm email</em>, <em>Company you are applying to</em> and all of section 6
+      empty, and reports the section 6 fields as "left for you".
+    </p>
+
+    <h2>1. Plain fields, plus the traps</h2>
+    <p class="hint">
+      "Confirm email" and "Company you are applying to" must stay empty — they are the
+      classic mis-fills.
+    </p>
+    <div class="field"><label for="fn">First name</label><input id="fn" name="first_name" /></div>
+    <div class="field"><label for="ln">Last name</label><input id="ln" name="last_name" /></div>
+    <div class="field"><label for="em">Email</label><input id="em" type="email" name="email" /></div>
+    <div class="field"><label for="em2">Confirm email</label><input id="em2" name="email_confirm" /></div>
+    <div class="field"><label for="ph">Mobile phone</label><input id="ph" name="phone" /></div>
+    <div class="field"><label for="li">LinkedIn profile</label><input id="li" name="urls[LinkedIn]" /></div>
+    <div class="field"><label for="co">Company you are applying to</label><input id="co" name="target_company" /></div>
+
+    <h2>2. Autocomplete attributes only (no useful labels)</h2>
+    <p class="hint">Labels here are deliberately unhelpful; the autocomplete attribute should win.</p>
+    <div class="field"><label for="a1">Line one</label><input id="a1" autocomplete="address-line1" name="q7" /></div>
+    <div class="field"><label for="a2">Locality</label><input id="a2" autocomplete="address-level2" name="q8" /></div>
+    <div class="field"><label for="a3">Code</label><input id="a3" autocomplete="postal-code" name="q9" /></div>
+
+    <h2>3. Native select</h2>
+    <div class="field">
+      <label for="ctry">Country</label>
+      <select id="ctry" name="country">
+        <option value="">Select…</option>
+        <option value="sg">Singapore</option>
+        <option value="my">Malaysia</option>
+        <option value="us">United States of America</option>
+      </select>
+    </div>
+
+    <h2>4. Custom dropdown (react-select style, menu in a portal)</h2>
+    <div class="field">
+      <label id="nat-label">Nationality</label>
+      <div class="combo">
+        <input class="combo-input" role="combobox" aria-labelledby="nat-label"
+               aria-haspopup="listbox" aria-expanded="false" readonly />
+        <div class="combo-menu" role="listbox">
+          <div class="combo-option" role="option">Singaporean</div>
+          <div class="combo-option" role="option">Malaysian</div>
+          <div class="combo-option" role="option">Other</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>5. Repeating section behind an Add button</h2>
+    <div id="edu-section">
+      <h3 style="font-size:14px">Education</h3>
+      <button id="add-edu" type="button">Add another</button>
+    </div>
+
+    <h2>6. Sensitive questions — these must be left blank</h2>
+    <div class="field"><label for="sp">Will you require visa sponsorship?</label><input id="sp" name="sponsorship" /></div>
+    <div class="field"><label for="gd">Gender</label><input id="gd" name="gender" /></div>
+    <div class="field"><label for="sal">Expected salary</label><input id="sal" name="expected_salary" /></div>
+
+    <h2>7. Field inside a shadow root</h2>
+    <div id="shadow-host"></div>
+
+    <h2>9. Skills, the two shapes forms use</h2>
+    <p class="hint">
+      The first takes the whole list joined by commas. The second is a token input:
+      each skill is typed and committed with Enter, and appears as a chip.
+    </p>
+    <div class="field">
+      <label for="sk1">Skills</label>
+      <textarea id="sk1" name="skills" rows="2" placeholder="Separate each skill with a comma"></textarea>
+    </div>
+    <div class="field">
+      <label for="sk2">Technical skills</label>
+      <div id="chip-box" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+      <input id="sk2" name="skillToken" placeholder="Type a skill and press Enter" />
+    </div>
+
+    <h2>8. Workday-style naming, and a required field nothing can answer</h2>
+    <p class="hint">
+      These are the labels from a real NTT Data application. "Reference number" is
+      required and unanswerable, so it must appear in the overlay's "Still empty" list
+      and get outlined on the page.
+    </p>
+    <div class="field"><label for="sn">Street Name<span style="color:#dc2626">*</span></label><input id="sn" name="streetName" /></div>
+    <div class="field">
+      <label for="dt">Device Type<span style="color:#dc2626">*</span></label>
+      <select id="dt" name="deviceType" required>
+        <option value="">Please Select</option>
+        <option>Mobile</option>
+        <option>Home</option>
+        <option>Work</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="cpc">Country Phone Code<span style="color:#dc2626">*</span></label>
+      <select id="cpc" name="countryPhoneCode">
+        <option value="">Please Select</option>
+        <option>Singapore (+65)</option>
+        <option>Malaysia (+60)</option>
+      </select>
+    </div>
+    <div class="field"><label for="ref">Reference number<span style="color:#dc2626">*</span></label><input id="ref" name="referenceNumber" required /></div>
+
+    <script>
+      // --- custom dropdown: value lives in JS, not in the input -------------
+      const combo = document.querySelector(".combo-input");
+      const menu = document.querySelector(".combo-menu");
+
+      combo.addEventListener("click", () => {
+        const open = menu.dataset.open === "true";
+        menu.dataset.open = String(!open);
+        combo.setAttribute("aria-expanded", String(!open));
+      });
+
+      menu.addEventListener("click", (event) => {
+        const option = event.target.closest(".combo-option");
+        if (!option) return;
+        combo.value = option.textContent.trim();
+        menu.dataset.open = "false";
+        combo.setAttribute("aria-expanded", "false");
+        combo.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      // --- repeater: panels only exist after clicking Add ------------------
+      let eduCount = 0;
+      document.getElementById("add-edu").addEventListener("click", () => {
+        eduCount += 1;
+        const panel = document.createElement("fieldset");
+        panel.setAttribute("role", "group");
+        panel.innerHTML = `
+          <legend>Education ${eduCount}</legend>
+          <div class="field"><label>School</label><input name="school_${eduCount}" /></div>
+          <div class="field"><label>Degree</label><input name="degree_${eduCount}" /></div>
+          <div class="field"><label>Field of study</label><input name="major_${eduCount}" /></div>
+          <div class="field"><label>Grade</label><input name="gpa_${eduCount}" /></div>`;
+        // Mount late, the way a framework would after a re-render.
+        setTimeout(() => document.getElementById("add-edu").before(panel), 120);
+      });
+
+      // --- token input: commits on Enter, renders a chip -------------------
+      const tokenInput = document.getElementById("sk2");
+      const chipBox = document.getElementById("chip-box");
+
+      tokenInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const value = tokenInput.value.trim();
+        if (!value) return;
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        chip.style.cssText =
+          "background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;padding:2px 10px;font-size:13px";
+        chipBox.appendChild(chip);
+        tokenInput.value = "";
+      });
+
+      // --- shadow DOM ------------------------------------------------------
+      const shadow = document.getElementById("shadow-host").attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+        <style>
+          label { display:block; font-size:13px; font-weight:500; margin-bottom:3px; }
+          input { width:100%; padding:6px 8px; border:1px solid #d1d5db; border-radius:5px;
+                  font: 14px -apple-system, sans-serif; }
+        </style>
+        <label for="gh">GitHub profile</label>
+        <input id="gh" name="github_url" />`;
+    </script>
+  </body>
+</html>

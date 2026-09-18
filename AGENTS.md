@@ -14,13 +14,15 @@ npm, with `package-lock.json`. Copy `.env.example` to `.env` first.
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
+| `npm run verify:autofill` | Checks the extension's autofill field dictionary (no browser needed) |
 
 ## Layout
 
 - `src/app/` — routes. `(app)/` is the signed-in area, `api/` the route handlers, `auth/` the Supabase callback.
 - `src/lib/` — the domain code: `gmail/`, `ingest/`, `filter/`, `parser/`, `ai/`, `db/`, `profile/`, `kanban/`.
 - `src/components/`, `src/hooks/`, `src/utils/`, `src/types/` — UI and shared helpers.
-- `chrome-extension/` — the browser extension (background, content script, popup, bridge).
+- `chrome-extension/` — the browser extension (background, content script, popup, bridge)
+  and `autofill/`, the form-filling engine, field matcher and per-ATS adapters.
 - `supabase/` — `migrations/` and demo seed data.
 - `graphify-out/` — generated knowledge graph, see below.
 
@@ -29,6 +31,8 @@ npm, with `package-lock.json`. Copy `.env.example` to `.env` first.
 - [Design system](docs/design-system.md) — **read before writing any UI.** Warm/organic
   identity, colour tokens, the required class-naming rule, and the Tailwind v4 layer trap.
 - [Codebase graph](docs/codebase-graph.md) — query `/graphify` before grepping for code.
+- [Autofill research](docs/autofill-research.md) — how the extension autofill interacts
+  with application forms: layered adapter design, per-obstacle techniques, references.
 
 ## Libraries
 

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { extractTextFromPdf } from "@/lib/profile/extract-pdf";
 import { generateProfileFromCvText } from "@/lib/profile/generate-profile";
-import { upsertCandidateProfile } from "@/lib/db/candidate-profile";
+import { getCandidateProfile, upsertCandidateProfile } from "@/lib/db/candidate-profile";
+import { mergeProfileData } from "@/lib/profile/merge-profile";
+import { DEFAULT_PROFILE_DATA } from "@/lib/profile/defaults";
 import { trackUsage } from "@/lib/db/user-usage";
 import { isDemoUser } from "@/utils/demo";
 
@@ -87,9 +89,18 @@ export async function POST(request: Request) {
       output_tokens: generated.outputTokens,
     });
 
+    // A CV never mentions everything a profile holds, so the extraction is
+    // folded into what is already saved rather than replacing it. Without this,
+    // re-uploading wipes anything the user filled in by hand.
+    const existing = await getCandidateProfile(user.id);
+    const { merged, changed } = mergeProfileData(
+      existing?.profile_data ?? DEFAULT_PROFILE_DATA,
+      generated.profile_data,
+    );
+
     const { data, error } = await upsertCandidateProfile(user.id, {
       cv_markdown: generated.cv_markdown,
-      profile_data: generated.profile_data,
+      profile_data: merged,
       cv_filename: file.name,
       cv_mime_type: file.type,
       cv_uploaded_at: new Date().toISOString(),
@@ -99,7 +110,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ profile: data });
+    return NextResponse.json({ profile: data, changed_fields: changed });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected CV upload error";

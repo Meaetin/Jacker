@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Job Tracker Extractor",
-  "version": "1.0.0",
-  "description": "Extract job postings from any page and send them to Job Tracker for analysis.",
-  "permissions": ["activeTab", "tabs", "scripting", "storage"],
+  "version": "1.2.0",
+  "description": "Extract job postings from any page, and autofill job applications from your Job Tracker profile.",
+  "permissions": ["activeTab", "tabs", "scripting", "storage", "notifications"],
   "host_permissions": [
     "http://localhost/*",
     "https://jackerai.vercel.app/*",
     "http://*/*",
     "https://*/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
       "matches": ["http://localhost/*", "https://jackerai.vercel.app/*"],
@@ -22,6 +27,11 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Extract Job Posting"
+    "default_title": "Job Tracker",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

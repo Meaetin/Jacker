@@ -22,6 +22,7 @@ export interface WorkExperienceEntry {
 export interface CandidateProfileData {
   candidate: {
     full_name: string;
+    preferred_name: string;
     email: string;
     phone: string;
     location: string;
@@ -32,9 +33,13 @@ export interface CandidateProfileData {
   };
   personal_details: {
     address: string;
+    address_line_2: string;
     city: string;
+    state: string;
     postal_code: string;
     country: string;
+    phone_country_code: string;
+    phone_device_type: string;
     citizenship: string;
     work_authorization: string;
     current_occupation: string;
@@ -45,6 +50,7 @@ export interface CandidateProfileData {
   };
   education: EducationEntry[];
   work_experience: WorkExperienceEntry[];
+  skills: string[];
   ai_summary: string;
 }
 

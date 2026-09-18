@@ -3,6 +3,7 @@ import type { CandidateProfileData, FitBand } from "@/types/profile";
 export const DEFAULT_PROFILE_DATA: CandidateProfileData = {
   candidate: {
     full_name: "",
+    preferred_name: "",
     email: "",
     phone: "",
     location: "",
@@ -13,9 +14,13 @@ export const DEFAULT_PROFILE_DATA: CandidateProfileData = {
   },
   personal_details: {
     address: "",
+    address_line_2: "",
     city: "",
+    state: "",
     postal_code: "",
     country: "",
+    phone_country_code: "",
+    phone_device_type: "",
     citizenship: "",
     work_authorization: "",
     current_occupation: "",
@@ -26,6 +31,7 @@ export const DEFAULT_PROFILE_DATA: CandidateProfileData = {
   },
   education: [],
   work_experience: [],
+  skills: [],
   ai_summary: "",
 };
 
@@ -43,6 +49,27 @@ function normalizeBoolean(value: unknown): boolean {
   return value === true;
 }
 
+// Skills arrive from the model, from hand editing, and from rows saved before
+// the field existed, so anything non-string or blank is dropped and duplicates
+// (differing only by case or spacing) collapse to the first spelling seen.
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+
+  return out;
+}
+
 function normalizeObjectArray(
   value: unknown,
 ): Record<string, unknown>[] {
@@ -58,6 +85,7 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
   return {
     candidate: {
       full_name: normalizeString(candidate.full_name),
+      preferred_name: normalizeString(candidate.preferred_name),
       email: normalizeString(candidate.email),
       phone: normalizeString(candidate.phone),
       location: normalizeString(candidate.location),
@@ -68,9 +96,15 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
     },
     personal_details: {
       address: normalizeString(personalDetails.address),
+      address_line_2: normalizeString(personalDetails.address_line_2),
       city: normalizeString(personalDetails.city),
+      state: normalizeString(personalDetails.state),
       postal_code: normalizeString(personalDetails.postal_code),
       country: normalizeString(personalDetails.country),
+      phone_country_code: normalizeString(personalDetails.phone_country_code),
+      // Application forms almost always ask which kind of number this is, and
+      // for a CV's contact number the answer is effectively always Mobile.
+      phone_device_type: normalizeString(personalDetails.phone_device_type) || "Mobile",
       citizenship: normalizeString(personalDetails.citizenship),
       work_authorization: normalizeString(personalDetails.work_authorization),
       current_occupation: normalizeString(personalDetails.current_occupation),
@@ -96,6 +130,7 @@ export function normalizeProfileData(input: unknown): CandidateProfileData {
       is_current: normalizeBoolean(item.is_current),
       description: normalizeString(item.description),
     })),
+    skills: normalizeStringArray(source.skills),
     ai_summary: normalizeString(source.ai_summary),
   };
 }
