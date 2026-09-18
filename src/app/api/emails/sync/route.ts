@@ -60,6 +60,23 @@ export async function POST(request: NextRequest) {
   // Persist a sync job so the UI can show live progress and survive refreshes.
   // Admin client keeps these writes reliable across the long-running request.
   const admin = createAdminClient();
+
+  // A run killed by the serverless timeout never reaches its catch, so its row
+  // stays 'running' and the dashboard latches a spinner on it — which also
+  // disables the menu holding Disconnect. Retire any leftovers first.
+  const { error: staleError } = await admin
+    .from("sync_jobs")
+    .update({
+      status: "error",
+      error: "Interrupted — the run did not finish",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("user_id", user.id)
+    .eq("status", "running");
+  if (staleError) {
+    console.error(`[sync] Could not clear stale jobs: ${staleError.message}`);
+  }
+
   const { data: job } = await admin
     .from("sync_jobs")
     .insert({ user_id: user.id, status: "running" })

@@ -15,6 +15,18 @@ export interface SyncJob {
   finished_at: string | null;
 }
 
+// A run is capped at 300s by the serverless ceiling, so anything still claiming
+// to be running after ten minutes was killed mid-flight and never reached the
+// code that marks it finished. Treat it as dead rather than spinning forever.
+const STALE_JOB_MS = 10 * 60 * 1000;
+
+function isStale(job: SyncJob): boolean {
+  return (
+    job.status === "running" &&
+    Date.now() - new Date(job.started_at).getTime() > STALE_JOB_MS
+  );
+}
+
 /**
  * Tracks the user's latest sync job via the DB + Realtime. On mount it restores
  * any in-flight job (so the spinner + progress survive a refresh), then streams
@@ -38,7 +50,7 @@ export function useSyncJob(userId?: string): SyncJob | null {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        if (active && data) setJob(data as SyncJob);
+        if (active && data && !isStale(data as SyncJob)) setJob(data as SyncJob);
       });
 
     const filter = `user_id=eq.${userId}`;
