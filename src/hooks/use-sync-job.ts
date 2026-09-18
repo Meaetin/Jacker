@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { createClient, realtimeReady } from "@/utils/supabase/client";
 
 export interface SyncJob {
   id: string;
@@ -54,23 +55,34 @@ export function useSyncJob(userId?: string): SyncJob | null {
       });
 
     const filter = `user_id=eq.${userId}`;
-    const channel = supabase
-      .channel(`sync_jobs:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sync_jobs", filter },
-        (payload) => setJob(payload.new as SyncJob)
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "sync_jobs", filter },
-        (payload) => setJob(payload.new as SyncJob)
-      )
-      .subscribe();
+    let channel: RealtimeChannel | undefined;
+
+    // Join only once the socket carries the user's token — see realtimeReady.
+    void realtimeReady().then(() => {
+      if (!active) return;
+
+      channel = supabase
+        .channel(`sync_jobs:${userId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "sync_jobs", filter },
+          (payload) => setJob(payload.new as SyncJob)
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "sync_jobs", filter },
+          (payload) => setJob(payload.new as SyncJob)
+        )
+        .subscribe((status, error) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error(`[realtime] sync_jobs channel ${status}`, error);
+          }
+        });
+    });
 
     return () => {
       active = false;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId]);
 
