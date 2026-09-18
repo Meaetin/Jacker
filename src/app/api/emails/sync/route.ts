@@ -67,11 +67,22 @@ export async function POST(request: NextRequest) {
     .single();
   const jobId = job?.id as string | undefined;
 
+  // The pipeline reports after every email, and with 8 parses in flight that is a
+  // lot of writes for a progress bar. Throttle to one every couple of seconds; the
+  // completion update below writes the authoritative final numbers either way.
+  const PROGRESS_WRITE_INTERVAL_MS = 2000;
+  let lastProgressWrite = 0;
+
   try {
     const result = await runIngestPipeline(user.id, {
       fromDate,
       onProgress: async (progress) => {
         if (!jobId) return;
+
+        const now = Date.now();
+        if (now - lastProgressWrite < PROGRESS_WRITE_INTERVAL_MS) return;
+        lastProgressWrite = now;
+
         await admin
           .from("sync_jobs")
           .update({

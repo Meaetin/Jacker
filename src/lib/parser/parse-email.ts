@@ -19,6 +19,11 @@ const NOT_JOB_RELATED: AIParseResult = {
   notes: null,
 };
 
+// Nothing upstream caps body length, and a newsletter-style HTML email can decode
+// to tens of thousands of tokens. Status and company live in the first screenful,
+// so the head is the part worth paying for.
+const MAX_BODY_CHARS = 8000;
+
 interface EmailInput {
   subject: string;
   fromEmail: string;
@@ -34,7 +39,15 @@ export async function parseJobEmail(email: EmailInput): Promise<{
   outputTokens: number;
   error?: string;
 }> {
-  const userMessage = `From: ${email.fromName} <${email.fromEmail}>\nSubject: ${email.subject}\n\n${email.bodyText}`;
+  let bodyText = email.bodyText;
+  if (bodyText.length > MAX_BODY_CHARS) {
+    console.log(
+      `[parser] Truncated body ${bodyText.length} → ${MAX_BODY_CHARS} chars: "${email.subject}"`
+    );
+    bodyText = bodyText.slice(0, MAX_BODY_CHARS);
+  }
+
+  const userMessage = `From: ${email.fromName} <${email.fromEmail}>\nSubject: ${email.subject}\n\n${bodyText}`;
 
   try {
     const response = await openai.chat.completions.create({

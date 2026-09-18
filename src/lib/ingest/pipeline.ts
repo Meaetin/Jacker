@@ -7,6 +7,19 @@ import { storeIfNew } from "@/lib/ingest/store-raw-email";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
 import { trackUsage } from "@/lib/db/user-usage";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { mapWithConcurrency } from "@/utils/concurrency";
+import type { GmailMessage } from "@/types/email";
+
+// Each parse is one OpenAI call plus a couple of per-email Supabase writes.
+// Held at 8 to match the Gmail fetch pool — gpt-4.1-nano's limits are far higher.
+const PARSE_CONCURRENCY = 8;
+
+/** An email that survived dedup and the pre-filter, and has been parsed. */
+interface ParsedEmail {
+  email: GmailMessage;
+  rawEmailId: string;
+  parseOutput: Awaited<ReturnType<typeof parseJobEmail>>;
+}
 
 export interface IngestResult {
   fetched: number;
@@ -105,102 +118,134 @@ export async function runIngestPipeline(
     });
   await report(0);
 
-  // Step 2: Process each email
-  for (let i = 0; i < emails.length; i++) {
-    const email = emails[i];
-    let rawEmailId: string | undefined;
-    try {
-      // Store raw email (dedup by gmail_message_id)
-      const { id, isNew } = await storeIfNew(email, userId, admin);
-      rawEmailId = id;
-      if (!isNew) {
-        await report(i + 1);
-        continue;
+  // Step 2: Store, pre-filter and parse every email.
+  //
+  // These steps only ever touch that email's own rows, so they run in parallel —
+  // the AI call is where nearly all the wall-clock goes. The application upserts,
+  // which do share state across emails, are deferred to phase 2 below.
+  let processed = 0;
+  const parsedEmails = await mapWithConcurrency(
+    emails,
+    PARSE_CONCURRENCY,
+    async (email, i): Promise<ParsedEmail | null> => {
+      let rawEmailId: string | undefined;
+      try {
+        // Store raw email (dedup by gmail_message_id)
+        const { id, isNew } = await storeIfNew(email, userId, admin);
+        rawEmailId = id;
+        if (!isNew) return null;
+        result.newEmails++;
+
+        // Step 3: Pre-filter
+        if (!isLikelyJobRelated(email)) {
+          console.log(`[ingest] [${i + 1}/${emails.length}] Skipped (not job-related): "${email.subject}"`);
+          await admin
+            .from("raw_emails")
+            .update({ parse_status: "not_job_related" })
+            .eq("id", rawEmailId);
+          return null;
+        }
+
+        // Step 4: AI parsing
+        console.log(`[ingest] [${i + 1}/${emails.length}] Parsing: "${email.subject}"`);
+        emailsScanned++;
+        const parseOutput = await parseJobEmail({
+          subject: email.subject,
+          fromEmail: email.from,
+          fromName: email.fromName,
+          bodyText: email.bodyText,
+        });
+
+        totalInputTokens += parseOutput.inputTokens;
+        totalOutputTokens += parseOutput.outputTokens;
+        result.parsed++;
+
+        // Step 5: Log parse result + update parse_status on raw_email
+        if (parseOutput.success) {
+          await admin
+            .from("raw_emails")
+            .update({ parse_status: "parsed" })
+            .eq("id", rawEmailId);
+        } else {
+          await admin
+            .from("raw_emails")
+            .update({ parse_status: "failed", parse_error: parseOutput.error ?? null })
+            .eq("id", rawEmailId);
+        }
+
+        await logParseResult({
+          db: admin,
+          userId,
+          rawEmailId,
+          rawResponse: parseOutput.rawResponse,
+          parsedSuccess: parseOutput.success,
+          errorMessage: parseOutput.error,
+        });
+
+        return { email, rawEmailId, parseOutput };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        console.error(`[ingest] Error processing email ${email.id}: ${msg}`);
+        result.errors.push(`Error processing email ${email.id}: ${msg}`);
+        if (rawEmailId) {
+          await admin
+            .from("raw_emails")
+            .update({ parse_status: "failed", parse_error: msg })
+            .eq("id", rawEmailId);
+        }
+        return null;
+      } finally {
+        await report(++processed);
       }
-      result.newEmails++;
+    }
+  );
 
-      // Step 3: Pre-filter
-      if (!isLikelyJobRelated(email)) {
-        console.log(`[ingest] [${i + 1}/${emails.length}] Skipped (not job-related): "${email.subject}"`);
-        await admin
-          .from("raw_emails")
-          .update({ parse_status: "not_job_related" })
-          .eq("id", rawEmailId);
-        await report(i + 1);
-        continue;
-      }
-
-      // Step 4: AI parsing
-      console.log(`[ingest] [${i + 1}/${emails.length}] Parsing: "${email.subject}"`);
-      emailsScanned++;
-      const parseOutput = await parseJobEmail({
-        subject: email.subject,
-        fromEmail: email.from,
-        fromName: email.fromName,
-        bodyText: email.bodyText,
-      });
-
-      totalInputTokens += parseOutput.inputTokens;
-      totalOutputTokens += parseOutput.outputTokens;
-      result.parsed++;
-
-      // Step 5: Log parse result + update parse_status on raw_email
-      if (parseOutput.success) {
-        await admin
-          .from("raw_emails")
-          .update({ parse_status: "parsed" })
-          .eq("id", rawEmailId);
-      } else {
-        await admin
-          .from("raw_emails")
-          .update({ parse_status: "failed", parse_error: parseOutput.error ?? null })
-          .eq("id", rawEmailId);
-      }
-
-      await logParseResult({
-        db: admin,
-        userId,
-        rawEmailId,
-        rawResponse: parseOutput.rawResponse,
-        parsedSuccess: parseOutput.success,
-        errorMessage: parseOutput.error,
-      });
-
-      // Step 6: Upsert application if job-related and actionable
+  // Step 6: Upsert applications, oldest email first.
+  //
+  // Sequential on purpose. Two emails belonging to the same application would
+  // otherwise race on read-modify-write, and two that both create one would each
+  // insert. The explicit sort means correctness no longer rests on the order
+  // Gmail happened to return.
+  const toUpsert = parsedEmails
+    .filter((parsed): parsed is ParsedEmail => parsed !== null)
+    .filter(({ parseOutput }) => {
       const isLowSignal =
         parseOutput.result.email_type === "job_alert" ||
         parseOutput.result.email_type === "application_viewed";
-      if (parseOutput.result.is_job_related && !isLowSignal) {
-        const upsertResult = await upsertApplication(
-          parseOutput.result,
-          rawEmailId,
-          email.threadId,
-          userId,
-          email.receivedAt,
-          admin
-        );
+      return parseOutput.result.is_job_related && !isLowSignal;
+    })
+    .sort((a, b) => a.email.receivedAt.localeCompare(b.email.receivedAt));
 
-        const company = parseOutput.result.company_from_email ?? parseOutput.result.company_from_body;
-        if (upsertResult.outcome === "inserted") {
-          console.log(`[ingest] New application: ${company} - ${parseOutput.result.role} (${parseOutput.result.status})`);
-          result.newApplications++;
-        } else if (upsertResult.outcome === "updated") {
-          console.log(`[ingest] Updated application: ${company} - ${parseOutput.result.role} → ${parseOutput.result.status}`);
-          result.updatedApplications++;
-        }
+  for (const { email, rawEmailId, parseOutput } of toUpsert) {
+    try {
+      const upsertResult = await upsertApplication(
+        parseOutput.result,
+        rawEmailId,
+        email.threadId,
+        userId,
+        email.receivedAt,
+        admin
+      );
+
+      const company = parseOutput.result.company_from_email ?? parseOutput.result.company_from_body;
+      if (upsertResult.outcome === "inserted") {
+        console.log(`[ingest] New application: ${company} - ${parseOutput.result.role} (${parseOutput.result.status})`);
+        result.newApplications++;
+      } else if (upsertResult.outcome === "updated") {
+        console.log(`[ingest] Updated application: ${company} - ${parseOutput.result.role} → ${parseOutput.result.status}`);
+        result.updatedApplications++;
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Unknown error";
-      console.error(`[ingest] Error processing email ${email.id}: ${msg}`);
-      result.errors.push(`Error processing email ${email.id}: ${msg}`);
-      if (rawEmailId) {
-        await admin
-          .from("raw_emails")
-          .update({ parse_status: "failed", parse_error: msg })
-          .eq("id", rawEmailId);
-      }
+      console.error(`[ingest] Error upserting from email ${email.id}: ${msg}`);
+      result.errors.push(`Error upserting from email ${email.id}: ${msg}`);
+      // Leave it failed so runReparsePipeline sweeps it up later.
+      await admin
+        .from("raw_emails")
+        .update({ parse_status: "failed", parse_error: msg })
+        .eq("id", rawEmailId);
     }
-    await report(i + 1);
+    await report(processed);
   }
 
   // Update last_sync_at to when this run started scanning (see note above).
