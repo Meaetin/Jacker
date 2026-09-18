@@ -1,4 +1,5 @@
 import { findExistingApplication } from "./match-application";
+import { shouldApplyStatus } from "./resolve-status-update";
 import type { Db } from "@/utils/supabase/db";
 import { updateApplication, insertApplication } from "@/lib/db/applications";
 import type { AIParseResult } from "@/types/parse-result";
@@ -27,15 +28,6 @@ function resolveCompany(
     ?? null;
   return normalizeCompany(raw);
 }
-
-const STATUS_PRIORITY: Record<ApplicationStatus, number> = {
-  unknown: 0,
-  applied: 1,
-  assessment: 2,
-  interview: 3,
-  offer: 4,
-  rejected: 5,
-};
 
 export type UpsertOutcome = "inserted" | "updated" | "unchanged" | "skipped";
 
@@ -72,37 +64,51 @@ export async function upsertApplication(
   }
 
   if (existing) {
-    const currentPriority =
-      STATUS_PRIORITY[existing.status as ApplicationStatus] ?? 0;
-    const newPriority = STATUS_PRIORITY[status] ?? 0;
+    const label = `"${existing.company} - ${existing.role}"`;
+    const decision = shouldApplyStatus({
+      incomingStatus: status,
+      incomingReceivedAt: receivedAt,
+      existingStatus: existing.status as ApplicationStatus,
+      existingUpdatedAt: existing.application_updated_at,
+    });
 
-    if (newPriority > currentPriority) {
-      const correctedCompany = resolveCompany(companyFromSubject, companyFromEmail, companyFromBody);
-      if (correctedCompany && correctedCompany !== existing.company) {
-        console.log(
-          `[upsert] Correcting company: "${existing.company}" → "${correctedCompany}"`
-        );
-      }
-
-      const { data, error } = await updateApplication(existing.id, userId, {
-        status,
-        status_confidence: parseResult.status_confidence,
-        source_email_id: rawEmailId,
-        interview_date: parseResult.interview_date,
-        interview_time: parseResult.interview_time,
-        location: parseResult.location,
-        notes: parseResult.notes,
-        application_updated_at: receivedAt ?? new Date().toISOString(),
-        ...(correctedCompany && correctedCompany !== existing.company
-          ? { company: correctedCompany }
-          : {}),
-        ...(role && role !== existing.role ? { role } : {}),
-      }, db);
-      if (error) throw new Error(error.message);
-      return { data, outcome: "updated" };
+    if (!decision.apply) {
+      console.log(
+        `[upsert] Keeping ${existing.status} on ${label} — ${decision.reason}`
+      );
+      return { data: existing, outcome: "unchanged" };
     }
 
-    return { data: existing, outcome: "unchanged" };
+    console.log(
+      `[upsert] ${existing.status} → ${status} on ${label} — ${decision.reason}`
+    );
+
+    const correctedCompany = resolveCompany(companyFromSubject, companyFromEmail, companyFromBody);
+    if (correctedCompany && correctedCompany !== existing.company) {
+      console.log(
+        `[upsert] Correcting company: "${existing.company}" → "${correctedCompany}"`
+      );
+    }
+
+    const { data, error } = await updateApplication(existing.id, userId, {
+      status,
+      status_confidence: parseResult.status_confidence,
+      source_email_id: rawEmailId,
+      interview_date: parseResult.interview_date,
+      interview_time: parseResult.interview_time,
+      location: parseResult.location,
+      notes: parseResult.notes,
+      // Only stamp a date we actually have. Falling back to now() would make an
+      // undated email look like it arrived this second, and every later
+      // comparison against this row would be measured from the wrong moment.
+      ...(receivedAt ? { application_updated_at: receivedAt } : {}),
+      ...(correctedCompany && correctedCompany !== existing.company
+        ? { company: correctedCompany }
+        : {}),
+      ...(role && role !== existing.role ? { role } : {}),
+    }, db);
+    if (error) throw new Error(error.message);
+    return { data, outcome: "updated" };
   }
 
   const company = resolveCompany(companyFromSubject, companyFromEmail, companyFromBody);
