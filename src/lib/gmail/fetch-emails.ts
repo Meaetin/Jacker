@@ -48,6 +48,7 @@ export async function fetchRecentEmails(
   console.log(`[gmail] Search query: ${query}, max ${maxResults} emails`);
 
   const allIds: string[] = [];
+  const seenIds = new Set<string>();
   let pageToken: string | undefined;
 
   // Gmail API ignores orderBy with `after:` queries, returning newest first.
@@ -63,7 +64,12 @@ export async function fetchRecentEmails(
     const messages = listResponse.data.messages ?? [];
 
     for (const msg of messages) {
-      if (msg.id) allIds.push(msg.id);
+      // Gmail can list the same message on two pages when mail arrives while we
+      // are paging. A repeated id would be handed to two workers at once.
+      if (msg.id && !seenIds.has(msg.id)) {
+        seenIds.add(msg.id);
+        allIds.push(msg.id);
+      }
     }
 
     pageToken = listResponse.data.nextPageToken ?? undefined;

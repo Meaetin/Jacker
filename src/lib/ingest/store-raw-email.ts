@@ -1,15 +1,18 @@
-import { storeRawEmail, emailExists } from "@/lib/db/raw-emails";
+import { storeRawEmail, findStoredEmailId } from "@/lib/db/raw-emails";
 import type { GmailMessage } from "@/types/email";
 import type { Db } from "@/utils/supabase/db";
+
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = "23505";
 
 export async function storeIfNew(
   message: GmailMessage,
   userId: string,
   db?: Db
 ): Promise<{ id: string; isNew: boolean }> {
-  const exists = await emailExists(message.id, userId, db);
-  if (exists) {
-    return { id: message.id, isNew: false };
+  const existingId = await findStoredEmailId(message.id, userId, db);
+  if (existingId) {
+    return { id: existingId, isNew: false };
   }
 
   const { data, error } = await storeRawEmail({
@@ -30,8 +33,26 @@ export async function storeIfNew(
     parse_error: null,
   }, db);
 
-  if (error || !data) {
-    throw new Error(`Failed to store email ${message.id}: ${error?.message}`);
+  if (error) {
+    // Checking then inserting is not atomic, so a second writer can land in
+    // between: Gmail lists the same message on two pages, or two syncs overlap.
+    // If the row that beat us is ours, the email is stored and that is fine.
+    if (error.code === UNIQUE_VIOLATION) {
+      const raced = await findStoredEmailId(message.id, userId, db);
+      if (raced) {
+        return { id: raced, isNew: false };
+      }
+      // Not ours. gmail_message_id is unique across the whole table rather than
+      // per user, so another account holds this message and we cannot store it.
+      throw new Error(
+        `Email ${message.id} is already stored under a different account`
+      );
+    }
+    throw new Error(`Failed to store email ${message.id}: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error(`Failed to store email ${message.id}: no row returned`);
   }
 
   return { id: data.id, isNew: true };

@@ -26,11 +26,12 @@ export async function storeRawEmail(
     .single();
 }
 
-export async function emailExists(
+/** The raw_emails row id for a Gmail message, or null if it is not stored yet. */
+export async function findStoredEmailId(
   gmailMessageId: string,
   userId: string,
   db?: Db
-) {
+): Promise<string | null> {
   const supabase = await resolveDb(db);
 
   const { data } = await supabase
@@ -40,5 +41,5 @@ export async function emailExists(
     .eq("user_id", userId)
     .maybeSingle();
 
-  return data !== null;
+  return data?.id ?? null;
 }
