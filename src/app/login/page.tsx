@@ -1,10 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login, signInWithGoogle } from "./actions";
+
+const AUTH_ERRORS: Record<string, string> = {
+  oauth_denied: "You cancelled the Google sign-in. Nothing was shared.",
+  oauth_failed: "Google sign-in failed. Please try again.",
+  link_expired: "That sign-in link has expired. Request a new one.",
+  missing_code: "Google sign-in failed. Please try again.",
+  demo_unavailable: "The demo account is unavailable right now.",
+};
+
+/**
+ * Reads the `?error=` the auth callback redirects back with. Split out because
+ * useSearchParams opts the tree into client-side rendering.
+ */
+function AuthErrorBanner() {
+  const reason = useSearchParams().get("error");
+  if (!reason) return null;
+
+  return (
+    <div className="auth-error-banner mt-4 rounded-lg bg-red-50 text-status-rejected text-sm p-3">
+      {AUTH_ERRORS[reason] ?? "Sign-in failed. Please try again."}
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +63,12 @@ export default function LoginPage() {
           Jacker
         </h1>
 
+        <Suspense fallback={null}>
+          <AuthErrorBanner />
+        </Suspense>
+
         {error && (
-          <div className="mt-4 rounded-lg bg-red-50 text-status-rejected text-sm p-3">
+          <div className="login-error-banner mt-4 rounded-lg bg-red-50 text-status-rejected text-sm p-3">
             {error}
           </div>
         )}
