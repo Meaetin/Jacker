@@ -1,3 +1,6 @@
+/** Which way the email travelled. Sent mail is often the application itself. */
+export type EmailDirection = "sent" | "received";
+
 export interface RawEmail {
   id: string;
   user_id: string;
@@ -6,6 +9,9 @@ export interface RawEmail {
   subject: string | null;
   from_email: string | null;
   from_name: string | null;
+  to_email: string | null;
+  to_name: string | null;
+  direction: EmailDirection;
   received_at: string | null;
   snippet: string | null;
   body_text: string | null;
@@ -20,6 +26,9 @@ export interface GmailMessage {
   threadId: string | null;
   from: string;
   fromName: string;
+  to: string;
+  toName: string;
+  direction: EmailDirection;
   subject: string;
   snippet: string;
   bodyText: string;

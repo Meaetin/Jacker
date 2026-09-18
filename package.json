@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint && eslint chrome-extension",
     "extract-job": "node scripts/extract-job.mjs",
-    "verify:autofill": "node scripts/verify-autofill-matcher.mjs && node scripts/verify-profile-mapping.mjs && node scripts/verify-profile-merge.mjs"
+    "verify:autofill": "node scripts/verify-autofill-matcher.mjs && node scripts/verify-profile-mapping.mjs && node scripts/verify-profile-merge.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -43,6 +44,7 @@
     "eslint-config-next": "^15.3.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.1"
   }
 }

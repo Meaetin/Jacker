@@ -10,6 +10,10 @@ import { isDemoUser } from "@/utils/demo";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+// Matches the dashboard's own staleness cut-off: past this a 'running' row can
+// only be a run the 300s ceiling killed before it could mark itself finished.
+const STALE_JOB_MS = 6 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -60,6 +64,47 @@ export async function POST(request: NextRequest) {
   // Persist a sync job so the UI can show live progress and survive refreshes.
   // Admin client keeps these writes reliable across the long-running request.
   const admin = createAdminClient();
+
+  // A run killed by the serverless timeout never reaches its catch, so its row
+  // stays 'running' and the dashboard latches a spinner on it — which also
+  // disables the menu holding Disconnect. Retire the leftovers, but only ones
+  // old enough to be dead: the ceiling is 300s, so anything younger than six
+  // minutes may still be working.
+  const staleBefore = new Date(Date.now() - STALE_JOB_MS).toISOString();
+  const { error: staleError } = await admin
+    .from("sync_jobs")
+    .update({
+      status: "error",
+      error: "Interrupted — the run did not finish",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("user_id", user.id)
+    .eq("status", "running")
+    .lt("started_at", staleBefore);
+  if (staleError) {
+    console.error(`[sync] Could not clear stale jobs: ${staleError.message}`);
+  }
+
+  // Whatever is left really is in flight — the daily cron, another tab, or a
+  // dashboard resuming a backlog. Two pipelines racing each other would each
+  // match against their own snapshot of the applications and could insert the
+  // same job twice, so the second caller waits instead.
+  const { data: active } = await admin
+    .from("sync_jobs")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "running")
+    .limit(1)
+    .maybeSingle();
+
+  if (active) {
+    console.log(`[sync] A sync is already running for user ${user.id} — refusing to start a second`);
+    return NextResponse.json(
+      { error: "A sync is already running", code: "already_running", jobId: active.id },
+      { status: 409 }
+    );
+  }
+
   const { data: job } = await admin
     .from("sync_jobs")
     .insert({ user_id: user.id, status: "running" })
@@ -67,11 +112,22 @@ export async function POST(request: NextRequest) {
     .single();
   const jobId = job?.id as string | undefined;
 
+  // The pipeline reports after every email, and with 8 parses in flight that is a
+  // lot of writes for a progress bar. Throttle to one every couple of seconds; the
+  // completion update below writes the authoritative final numbers either way.
+  const PROGRESS_WRITE_INTERVAL_MS = 2000;
+  let lastProgressWrite = 0;
+
   try {
     const result = await runIngestPipeline(user.id, {
       fromDate,
       onProgress: async (progress) => {
         if (!jobId) return;
+
+        const now = Date.now();
+        if (now - lastProgressWrite < PROGRESS_WRITE_INTERVAL_MS) return;
+        lastProgressWrite = now;
+
         await admin
           .from("sync_jobs")
           .update({
@@ -85,6 +141,28 @@ export async function POST(request: NextRequest) {
     });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // The pipeline reports a fatal failure in its return value rather than
+    // throwing, so without this a dead Gmail token came back as a 200 and the
+    // dashboard showed a successful sync that had done nothing.
+    if (result.fatalError) {
+      console.error(`[sync] Sync failed after ${elapsed}s: ${result.fatalError.message}`);
+      if (jobId) {
+        await admin
+          .from("sync_jobs")
+          .update({
+            status: "error",
+            error: result.fatalError.message,
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+      }
+      return NextResponse.json(
+        { error: result.fatalError.message, code: result.fatalError.code, jobId },
+        { status: result.fatalError.code === "gmail_auth" ? 401 : 502 }
+      );
+    }
+
     console.log(`[sync] Sync completed in ${elapsed}s`);
 
     if (jobId) {

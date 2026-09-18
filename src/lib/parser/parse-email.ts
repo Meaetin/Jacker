@@ -3,6 +3,7 @@ import { AI_MODELS } from "@/lib/ai/models";
 import { SYSTEM_PROMPT } from "./prompt";
 import { aiParseResultSchema } from "@/types/schemas";
 import type { AIParseResult } from "@/types/parse-result";
+import type { EmailDirection } from "@/types/email";
 
 const NOT_JOB_RELATED: AIParseResult = {
   is_job_related: false,
@@ -19,10 +20,17 @@ const NOT_JOB_RELATED: AIParseResult = {
   notes: null,
 };
 
+// Nothing upstream caps body length, and a newsletter-style HTML email can decode
+// to tens of thousands of tokens. Status and company live in the first screenful,
+// so the head is the part worth paying for.
+const MAX_BODY_CHARS = 8000;
+
 interface EmailInput {
   subject: string;
   fromEmail: string;
   fromName: string;
+  toEmail: string;
+  direction: EmailDirection;
   bodyText: string;
 }
 
@@ -34,7 +42,21 @@ export async function parseJobEmail(email: EmailInput): Promise<{
   outputTokens: number;
   error?: string;
 }> {
-  const userMessage = `From: ${email.fromName} <${email.fromEmail}>\nSubject: ${email.subject}\n\n${email.bodyText}`;
+  let bodyText = email.bodyText;
+  if (bodyText.length > MAX_BODY_CHARS) {
+    console.log(
+      `[parser] Truncated body ${bodyText.length} → ${MAX_BODY_CHARS} chars: "${email.subject}"`
+    );
+    bodyText = bodyText.slice(0, MAX_BODY_CHARS);
+  }
+
+  // Direction first: on a sent email the From is the user, and the company is in
+  // the To header. The model needs to know that before reading either.
+  const userMessage =
+    `Direction: ${email.direction}\n` +
+    `From: ${email.fromName} <${email.fromEmail}>\n` +
+    `To: ${email.toEmail}\n` +
+    `Subject: ${email.subject}\n\n${bodyText}`;
 
   try {
     const response = await openai.chat.completions.create({

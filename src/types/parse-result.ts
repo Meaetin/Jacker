@@ -1,5 +1,7 @@
 export type EmailType =
   | "application_update"
+  /** The user emailed a company to apply — the application event itself. */
+  | "application_sent"
   | "interview_invitation"
   | "rejection"
   | "offer"

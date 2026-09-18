@@ -13,18 +13,31 @@ interface DashboardActionsProps {
   isDemo?: boolean;
   userId?: string;
   lastSyncAt?: string | null;
+  /** Emails a previous capped run left behind, as recorded by the pipeline. */
+  pendingEmails?: number;
 }
 
-interface ReparseResult {
+// A sync request handles one capped round of emails. A backlog larger than the
+// cap needs several, so the client keeps calling until the server reports
+// nothing left. The bound is a safety net: without it a server bug that always
+// reported work remaining would spin syncs forever.
+const MAX_SYNC_ROUNDS = 25;
+
+/** Progress across every round of one chain, not just the round in flight. */
+interface SyncChain {
+  /** Emails finished by rounds that have already returned. */
+  done: number;
+  /** The whole backlog, known from the first response: its work plus its leftovers. */
   total: number;
-  parsed: number;
-  skipped: number;
-  newApplications: number;
-  errors: string[];
-  duration?: string;
 }
 
-export function DashboardActions({ gmailConnected, isDemo = false, userId, lastSyncAt = null }: DashboardActionsProps) {
+interface DeleteResult {
+  applications: number;
+  rawEmails: number;
+  parseLogs: number;
+}
+
+export function DashboardActions({ gmailConnected, isDemo = false, userId, lastSyncAt = null, pendingEmails = 0 }: DashboardActionsProps) {
   const job = useSyncJob(userId);
   // After a sync finishes this session, reflect its time without a refresh.
   const effectiveLastSync =
@@ -32,30 +45,46 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   // "starting" bridges the gap between clicking Sync and the job row arriving
   // over Realtime; after that the job's status drives the spinner.
   const [starting, setStarting] = useState(false);
-  const [reparsing, setReparsing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [syncFromDate, setSyncFromDate] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [syncDone, setSyncDone] = useState<SyncJob | null>(null);
-  const [reparseResult, setReparseResult] = useState<ReparseResult | null>(null);
+  const [chain, setChain] = useState<SyncChain | null>(null);
+  const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [reparseError, setReparseError] = useState<string | null>(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const handledJobRef = useRef<string | null>(null);
+  // True while more rounds are still coming, so the toast waits for the last one.
+  const chainingRef = useRef(false);
+  // Auto-resume is a once-per-mount decision, not something to retry on rerender.
+  const resumedRef = useRef(false);
 
   const syncing = starting || job?.status === "running";
-  const busy = syncing || reparsing;
+  const busy = syncing || deleting;
+
+  // Mid-chain the job row only knows about its own round, so its numbers would
+  // restart at zero every 100 emails. Offset them by what earlier rounds did.
+  const inRound = job?.status === "running" ? job.processed : 0;
+  const progress = chain
+    ? { processed: chain.done + inRound, total: chain.total }
+    : job?.status === "running" && job.total > 0
+      ? { processed: job.processed, total: job.total }
+      : null;
 
   const syncLabel =
-    job?.status === "running" && job.total > 0
-      ? `Parsing ${job.processed}/${job.total}…`
+    syncing && progress
+      ? `Parsing ${progress.processed}/${progress.total}…`
       : syncing
         ? "Syncing…"
-        : reparsing
-          ? "Parsing…"
+        : deleting
+          ? "Deleting…"
           : "Sync";
 
   // Surface a toast once when a job finishes (done or error).
@@ -64,6 +93,9 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     const key = `${job.id}:${job.status}`;
     if (handledJobRef.current === key) return;
     handledJobRef.current = key;
+    // Every round but the last finishes "done" while the chain continues.
+    // handleSync raises the one toast, once the whole backlog is drained.
+    if (chainingRef.current && job.status === "done") return;
     setStarting(false);
     if (job.status === "error") {
       setSyncError(job.error || "Sync failed");
@@ -73,15 +105,29 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   }, [job]);
 
   useEffect(() => {
-    if (!syncDone && !reparseResult && !syncError && !reparseError) return;
+    if (!syncDone && !deleteResult && !syncError && !deleteError) return;
     const timer = setTimeout(() => {
       setSyncDone(null);
-      setReparseResult(null);
+      setDeleteResult(null);
       setSyncError(null);
-      setReparseError(null);
+      setDeleteError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [syncDone, reparseResult, syncError, reparseError]);
+  }, [syncDone, deleteResult, syncError, deleteError]);
+
+  // A big first sync runs as a chain of capped rounds. If the user closes the
+  // tab partway through, the pipeline has already recorded what it did not
+  // reach — so pick the backlog up here rather than leaving it to the daily
+  // cron, which would take days to drain it.
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (pendingEmails <= 0 || !gmailConnected || isDemo) return;
+    resumedRef.current = true;
+    void handleSync();
+    // handleSync is stable for the life of the component and this must fire
+    // once on mount, so it deliberately does not re-run as state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEmails, gmailConnected, isDemo]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -98,33 +144,76 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     setDropdownOpen(false);
     setSyncDone(null);
     setSyncError(null);
+    setNeedsReconnect(false);
+    setChain(null);
+    chainingRef.current = true;
+
+    const body: { fromDate?: string } = {};
+    if (syncFromDate) body.fromDate = syncFromDate;
+
+    // Totals for the whole chain. The per-round response only describes its own
+    // round, and the toast should report the sync the user actually asked for.
+    let done = 0;
+    let newApplications = 0;
+    let updatedApplications = 0;
+    let lastJobId: string | undefined;
 
     try {
-      const body: { fromDate?: string } = {};
-      if (syncFromDate) body.fromDate = syncFromDate;
+      for (let round = 0; round < MAX_SYNC_ROUNDS; round++) {
+        const res = await fetch("/api/emails/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
 
-      const res = await fetch("/api/emails/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
+        if (!res.ok) {
+          // Another tab, or the cron, already holds the sync. That run will
+          // drain the same backlog, so bow out quietly rather than alarming
+          // the user about a conflict they did not cause.
+          if (res.status === 409) return;
 
-      if (!res.ok) {
-        setSyncError(data.error || "Sync failed");
-        return;
+          setSyncError(data.error || "Sync failed");
+          // A dead refresh token is only fixable by re-authorising, and there is
+          // no other route to it: "Connect Gmail" renders only when no token row
+          // exists, and a broken token still counts as connected.
+          setNeedsReconnect(data.code === "gmail_auth");
+          return;
+        }
+
+        const fetched = data.fetched ?? 0;
+        const remaining = data.remaining ?? 0;
+        done += fetched;
+        newApplications += data.newApplications ?? 0;
+        updatedApplications += data.updatedApplications ?? 0;
+        lastJobId = data.jobId;
+
+        // Only the first response can size the backlog: what this round took
+        // plus what the cap left behind. Later rounds just advance the count.
+        setChain((current) =>
+          current ? { done, total: current.total } : { done, total: done + remaining }
+        );
+
+        if (remaining === 0) break;
+
+        // A round that took nothing yet still reports work left is not shrinking
+        // the backlog. Looping would hammer the same window, so stop and let the
+        // toast report what did get through.
+        if (fetched === 0) break;
       }
 
-      // The request resolves only when the pipeline finishes. Build a final
-      // snapshot from the response so the toast works even if Realtime is down,
-      // and mark it handled so the Realtime "done" event doesn't double-toast.
+      chainingRef.current = false;
+
+      // The requests resolve only once their pipeline finishes, so these totals
+      // are final. Building the snapshot here means the toast works even if
+      // Realtime is down, and marking it handled stops a double-toast.
       const doneJob: SyncJob = {
-        id: data.jobId ?? "local",
+        id: lastJobId ?? "local",
         status: "done",
-        total: data.fetched ?? 0,
-        processed: data.fetched ?? 0,
-        new_applications: data.newApplications ?? 0,
-        updated_applications: data.updatedApplications ?? 0,
+        total: done,
+        processed: done,
+        new_applications: newApplications,
+        updated_applications: updatedApplications,
         error: null,
         started_at: "",
         finished_at: null,
@@ -134,33 +223,37 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     } catch {
       setSyncError("Network error — check your connection and try again");
     } finally {
+      chainingRef.current = false;
       setStarting(false);
+      setChain(null);
     }
   }
 
-  async function handleReparse() {
-    setReparsing(true);
-    setDropdownOpen(false);
-    setReparseResult(null);
-    setReparseError(null);
+  async function handleDeleteData() {
+    setDeleting(true);
+    setConfirmingDelete(false);
+    setDeleteResult(null);
+    setDeleteError(null);
 
     try {
-      const res = await fetch("/api/emails/reparse", { method: "POST" });
+      const res = await fetch("/api/data", { method: "DELETE" });
       const data = await res.json();
 
       if (!res.ok) {
-        setReparseError(data.error || "Re-parse failed");
+        setDeleteError(data.error || "Could not delete your data");
         return;
       }
 
-      // New/updated applications stream in via Realtime — no refresh needed.
-      setReparseResult(data);
+      setDeleteResult(data.deleted);
+      // Applications are gone, so the list on screen is now wrong.
+      router.refresh();
     } catch {
-      setReparseError("Network error — check your connection and try again");
+      setDeleteError("Network error — check your connection and try again");
     } finally {
-      setReparsing(false);
+      setDeleting(false);
     }
   }
+
 
   async function handleDisconnect() {
     setDisconnecting(true);
@@ -187,9 +280,9 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
 
   function dismissResult() {
     setSyncDone(null);
-    setReparseResult(null);
+    setDeleteResult(null);
     setSyncError(null);
-    setReparseError(null);
+    setDeleteError(null);
   }
 
   if (!gmailConnected) {
@@ -268,10 +361,14 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
                 Sync Emails
               </button>
               <button
-                onClick={handleReparse}
-                className="reparse-start-button btn-secondary text-sm w-full"
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setDeleteError(null);
+                  setConfirmingDelete(true);
+                }}
+                className="delete-data-button btn-secondary text-sm w-full text-status-rejected"
               >
-                Re-parse Stored Emails
+                Delete All Data
               </button>
             </div>
             <div className="gmail-disconnect-section mt-3 border-t border-border pt-3">
@@ -291,21 +388,31 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
         </div>
       </div>
 
-      {(syncDone || syncError || reparseResult || reparseError) && (
+      {(syncDone || syncError || deleteResult || deleteError) && (
         <div className="sync-toast">
           {syncError && (
             <div className="sync-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
-              <p className="flex-1">Sync failed: {syncError}</p>
+              <div className="sync-error-body flex-1">
+                <p>Sync failed: {syncError}</p>
+                {needsReconnect && (
+                  <a
+                    href="/api/auth/gmail"
+                    className="gmail-reconnect-link mt-1 inline-flex font-medium underline"
+                  >
+                    Reconnect Gmail
+                  </a>
+                )}
+              </div>
               <button onClick={dismissResult} className="sync-dismiss text-status-rejected/60 hover:text-status-rejected">
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
 
-          {reparseError && (
-            <div className="reparse-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
-              <p className="flex-1">Re-parse failed: {reparseError}</p>
-              <button onClick={dismissResult} className="reparse-dismiss text-status-rejected/60 hover:text-status-rejected">
+          {deleteError && (
+            <div className="delete-error-toast flex items-start gap-2 rounded-lg bg-red-50/60 border border-status-rejected/20 text-sm text-status-rejected p-3">
+              <p className="flex-1">Delete failed: {deleteError}</p>
+              <button onClick={dismissResult} className="delete-dismiss text-status-rejected/60 hover:text-status-rejected">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -327,24 +434,65 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
             </div>
           )}
 
-          {reparseResult && !reparseError && (
-            <div className="reparse-success-toast flex items-start gap-2 rounded-lg bg-brand-light border border-brand/20 text-sm p-3">
-              <div className="reparse-toast-body flex-1">
-                <p className="font-medium text-brand">
-                  Re-parse complete{reparseResult.duration ? ` in ${reparseResult.duration}` : ""}
-                </p>
+          {deleteResult && !deleteError && (
+            <div className="delete-success-toast flex items-start gap-2 rounded-lg bg-brand-light border border-brand/20 text-sm p-3">
+              <div className="delete-toast-body flex-1">
+                <p className="font-medium text-brand">Data deleted</p>
                 <p className="text-brand/80">
-                  {reparseResult.parsed} parsed, {reparseResult.skipped} skipped
-                  {reparseResult.newApplications > 0 && ` — ${reparseResult.newApplications} new application${reparseResult.newApplications !== 1 ? "s" : ""}`}
+                  {deleteResult.applications} application{deleteResult.applications !== 1 ? "s" : ""},{" "}
+                  {deleteResult.rawEmails} email{deleteResult.rawEmails !== 1 ? "s" : ""} removed. Sync to start fresh.
                 </p>
               </div>
-              <button onClick={dismissResult} className="reparse-dismiss text-brand/40 hover:text-brand">
+              <button onClick={dismissResult} className="delete-dismiss text-brand/40 hover:text-brand">
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
         </div>
       )}
+
+      <Dialog
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        contentClassName="max-w-md"
+      >
+        <div className="delete-data-content space-y-4">
+          <h3 className="delete-data-title font-display text-lg font-semibold text-text-primary">
+            Delete all data
+          </h3>
+          <p className="delete-data-warning text-sm text-text-secondary">
+            This removes every tracked application, every stored email and every
+            parse log. It cannot be undone, and anything you edited by hand goes
+            with it.
+          </p>
+          <p className="delete-data-note text-sm text-text-secondary">
+            Your Gmail connection stays. The next sync starts from scratch, so
+            your mail can be read again from any date you choose.
+          </p>
+          {deleteError && (
+            <p className="delete-data-error text-sm text-status-rejected">
+              {deleteError}
+            </p>
+          )}
+          <div className="delete-data-actions flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmingDelete(false)}
+            >
+              Cancel
+            </Button>
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={deleting}
+              onClick={handleDeleteData}
+            >
+              {deleting ? "Deleting…" : "Delete everything"}
+            </button>
+          </div>
+        </div>
+      </Dialog>
 
       <Dialog
         open={confirmingDisconnect}

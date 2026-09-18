@@ -15,6 +15,7 @@ npm, with `package-lock.json`. Copy `.env.example` to `.env` first.
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
 | `npm run verify:autofill` | Checks the extension's autofill field dictionary (no browser needed) |
+| `npm test` | Vitest, once through |
 
 ## Layout
 

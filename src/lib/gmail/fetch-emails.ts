@@ -3,10 +3,24 @@ import type { OAuth2Client } from "google-auth-library";
 import type { GmailMessage } from "@/types/email";
 import { parseGmailMessage } from "./parse-raw";
 import { resolveDb, type Db } from "@/utils/supabase/db";
+import { mapWithConcurrency } from "@/utils/concurrency";
 
 const BASE_QUERY = `(application OR applying OR thanks OR "thank you for applying" OR "regret to inform" OR "move forward with other candidates" OR offer OR assessment OR shortlisted OR interview) -category:promotions -category:social`;
 
 const PAGE_SIZE = 50;
+
+// Gmail allows 250 quota units per user per second and messages.get costs 5,
+// so 8 in flight sits well inside the budget.
+const BODY_FETCH_CONCURRENCY = 8;
+
+// Message ids per stored-email lookup — PostgREST puts them all in the URL.
+const ID_LOOKUP_CHUNK = 200;
+
+export interface FetchEmailsResult {
+  emails: GmailMessage[];
+  /** New messages this search matched but the cap left behind. */
+  remaining: number;
+}
 
 export async function fetchRecentEmails(
   auth: OAuth2Client,
@@ -14,7 +28,7 @@ export async function fetchRecentEmails(
   afterDate?: Date,
   userId?: string,
   db?: Db
-): Promise<GmailMessage[]> {
+): Promise<FetchEmailsResult> {
   const gmail = google.gmail({ version: "v1", auth });
 
   let query: string;
@@ -34,6 +48,7 @@ export async function fetchRecentEmails(
   console.log(`[gmail] Search query: ${query}, max ${maxResults} emails`);
 
   const allIds: string[] = [];
+  const seenIds = new Set<string>();
   let pageToken: string | undefined;
 
   // Gmail API ignores orderBy with `after:` queries, returning newest first.
@@ -49,7 +64,12 @@ export async function fetchRecentEmails(
     const messages = listResponse.data.messages ?? [];
 
     for (const msg of messages) {
-      if (msg.id) allIds.push(msg.id);
+      // Gmail can list the same message on two pages when mail arrives while we
+      // are paging. A repeated id would be handed to two workers at once.
+      if (msg.id && !seenIds.has(msg.id)) {
+        seenIds.add(msg.id);
+        allIds.push(msg.id);
+      }
     }
 
     pageToken = listResponse.data.nextPageToken ?? undefined;
@@ -61,38 +81,59 @@ export async function fetchRecentEmails(
   // Reverse: Gmail returns newest-first, we want oldest-first
   allIds.reverse();
 
-  // Filter out already-stored message IDs
+  // Filter out already-stored message IDs. Every id lands in the query string, so
+  // this goes out in chunks rather than as one request that grows without bound.
   let targetIds = allIds;
   if (userId) {
     const supabase = await resolveDb(db);
-    const { data: stored } = await supabase
-      .from("raw_emails")
-      .select("gmail_message_id")
-      .in("gmail_message_id", allIds);
+    const storedSet = new Set<string>();
 
-    const storedSet = new Set(stored?.map((r) => r.gmail_message_id) ?? []);
+    for (let i = 0; i < allIds.length; i += ID_LOOKUP_CHUNK) {
+      const chunk = allIds.slice(i, i + ID_LOOKUP_CHUNK);
+      const { data: stored, error } = await supabase
+        .from("raw_emails")
+        .select("gmail_message_id")
+        .eq("user_id", userId)
+        .in("gmail_message_id", chunk);
+
+      // Swallowing this would silently re-fetch every body we already have.
+      if (error) throw new Error(`Stored-email lookup failed: ${error.message}`);
+
+      for (const row of stored ?? []) {
+        if (row.gmail_message_id) storedSet.add(row.gmail_message_id);
+      }
+    }
+
     targetIds = allIds.filter((id) => !storedSet.has(id));
     console.log(`[gmail] ${allIds.length} total, ${storedSet.size} already stored, ${targetIds.length} new`);
   }
 
+  // Count what the cap leaves behind before slicing. The caller needs this to
+  // decide whether this window is drained.
+  const remaining = Math.max(0, targetIds.length - maxResults);
   targetIds = targetIds.slice(0, maxResults);
 
+  if (remaining > 0) {
+    console.log(`[gmail] Capped at ${maxResults}; ${remaining} new messages left for the next run`);
+  }
   console.log(`[gmail] Found ${allIds.length} messages, fetching ${targetIds.length} oldest full bodies...`);
 
-  // Fetch full message bodies
-  const results: GmailMessage[] = [];
-  for (let i = 0; i < targetIds.length; i++) {
+  // Fetch full message bodies. mapWithConcurrency preserves input order, so the
+  // oldest-first ordering established above survives the parallel fetch.
+  let fetched = 0;
+  const emails = await mapWithConcurrency(targetIds, BODY_FETCH_CONCURRENCY, async (id) => {
     const { data: full } = await gmail.users.messages.get({
       userId: "me",
-      id: targetIds[i],
+      id,
       format: "full",
     });
 
-    results.push(parseGmailMessage(full));
-    if ((i + 1) % 25 === 0) {
-      console.log(`[gmail] Fetched ${i + 1}/${targetIds.length} full messages`);
+    fetched++;
+    if (fetched % 25 === 0) {
+      console.log(`[gmail] Fetched ${fetched}/${targetIds.length} full messages`);
     }
-  }
+    return parseGmailMessage(full);
+  });
 
-  return results;
+  return { emails, remaining };
 }

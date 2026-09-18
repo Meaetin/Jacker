@@ -128,11 +128,25 @@ export function ApplicationModal({
           ) : (
             <>
               <div className="application-modal-fields space-y-4">
-                {view.status_confidence !== null && (
+                {/* Once you've set the status yourself, the parser's confidence
+                    in its own guess is no longer what you want to see. */}
+                {view.status_source === "manual" ? (
                   <div className="application-modal-field">
-                    <p className="text-sm text-text-secondary">Confidence</p>
-                    <ConfidenceBar confidence={view.status_confidence} />
+                    <p className="text-sm text-text-secondary">Status</p>
+                    <p className="application-modal-status-source text-text-primary">
+                      Set by you
+                      <span className="application-modal-status-source-note text-text-muted">
+                        {" — a later email can still update it"}
+                      </span>
+                    </p>
                   </div>
+                ) : (
+                  view.status_confidence !== null && (
+                    <div className="application-modal-field">
+                      <p className="text-sm text-text-secondary">Confidence</p>
+                      <ConfidenceBar confidence={view.status_confidence} />
+                    </div>
+                  )
                 )}
 
                 {view.interview_date && (

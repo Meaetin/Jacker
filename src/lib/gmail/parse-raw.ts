@@ -85,16 +85,26 @@ export function parseGmailMessage(
 ): GmailMessage {
   const headers = message.payload?.headers ?? [];
   const from = getHeader(headers, "from");
-  const fromName = getHeader(headers, "from").split("<")[0].trim();
+  const fromName = from.split("<")[0].trim();
+  const to = getHeader(headers, "to");
+  const toName = to.split("<")[0].trim();
   const subject = getHeader(headers, "subject");
   const bodyText = decodeBody(message.payload ?? {});
   const bodyHtml = decodeHtmlBody(message.payload ?? {});
+
+  // Gmail's search returns sent mail alongside received. For an email the user
+  // sent, the company is in the To header and the From is the user themselves —
+  // so everything downstream needs to know which way it went.
+  const direction = message.labelIds?.includes("SENT") ? "sent" : "received";
 
   return {
     id: message.id ?? "",
     threadId: message.threadId ?? null,
     from: from,
     fromName,
+    to,
+    toName,
+    direction,
     subject,
     snippet: message.snippet ?? "",
     bodyText,

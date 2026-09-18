@@ -48,9 +48,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 
+  const now = new Date().toISOString();
   const { data, error } = await updateApplication(id, user.id, {
     ...parsed.data,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
+    // Ingest compares email dates to decide whether to overwrite a status. A
+    // hand-edited one has no email behind it, so without a date of its own the
+    // row still looks last-touched by whatever email set it — and the next
+    // email of any age would silently undo the correction.
+    ...(parsed.data.status !== undefined
+      ? { application_updated_at: now, status_source: "manual" }
+      : {}),
   });
 
   if (error) {
