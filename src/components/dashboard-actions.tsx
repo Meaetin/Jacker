@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { RefreshCw, LoaderCircle, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { RefreshCw, LoaderCircle, X, Mail } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useSyncJob, type SyncJob } from "@/hooks/use-sync-job";
 import { formatRelativeTime, formatTimestamp, formatDate } from "@/utils/date";
 
@@ -36,6 +39,10 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
   const [reparseResult, setReparseResult] = useState<ReparseResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [reparseError, setReparseError] = useState<string | null>(null);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const handledJobRef = useRef<string | null>(null);
 
@@ -155,6 +162,29 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     }
   }
 
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    setDisconnectError(null);
+
+    try {
+      const res = await fetch("/api/auth/gmail/disconnect", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setDisconnectError(data.error || "Could not disconnect Gmail");
+        return;
+      }
+
+      setConfirmingDisconnect(false);
+      // gmailConnected is computed by the server component, so re-render it.
+      router.refresh();
+    } catch {
+      setDisconnectError("Network error — check your connection and try again");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
   function dismissResult() {
     setSyncDone(null);
     setReparseResult(null);
@@ -166,10 +196,7 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
     return (
       <div className="gmail-connect-prompt card text-center py-12">
         <div className="gmail-connect-icon mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-light">
-          <svg className="h-6 w-6 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M22 6l-10 7L2 6" />
-          </svg>
+          <Mail className="gmail-connect-mail-icon h-6 w-6 text-brand" />
         </div>
         <h2 className="font-display text-lg font-semibold text-text-primary">
           Connect your Gmail
@@ -247,6 +274,18 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
                 Re-parse Stored Emails
               </button>
             </div>
+            <div className="gmail-disconnect-section mt-3 border-t border-border pt-3">
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setDisconnectError(null);
+                  setConfirmingDisconnect(true);
+                }}
+                className="gmail-disconnect-button w-full text-sm text-status-rejected hover:underline"
+              >
+                Disconnect Gmail
+              </button>
+            </div>
           </div>
         )}
         </div>
@@ -306,6 +345,45 @@ export function DashboardActions({ gmailConnected, isDemo = false, userId, lastS
           )}
         </div>
       )}
+
+      <Dialog
+        open={confirmingDisconnect}
+        onClose={() => setConfirmingDisconnect(false)}
+        contentClassName="max-w-md"
+      >
+        <div className="gmail-disconnect-content space-y-4">
+          <h3 className="gmail-disconnect-title font-display text-lg font-semibold text-text-primary">
+            Disconnect Gmail
+          </h3>
+          <p className="gmail-disconnect-warning text-sm text-text-secondary">
+            Jacker will stop reading your inbox, and its access will be revoked
+            at Google. Applications you have already tracked stay exactly as
+            they are. You can reconnect whenever you like.
+          </p>
+          {disconnectError && (
+            <p className="gmail-disconnect-error text-sm text-status-rejected">
+              {disconnectError}
+            </p>
+          )}
+          <div className="gmail-disconnect-actions flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmingDisconnect(false)}
+            >
+              Cancel
+            </Button>
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={disconnecting}
+              onClick={handleDisconnect}
+            >
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
