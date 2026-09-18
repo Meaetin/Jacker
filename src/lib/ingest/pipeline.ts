@@ -275,7 +275,7 @@ export async function runIngestPipeline(
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error(`[ingest] Error upserting from email ${email.id}: ${msg}`);
       result.errors.push(`Error upserting from email ${email.id}: ${msg}`);
-      // Leave it failed so runReparsePipeline sweeps it up later.
+      // Leave it failed so the row is visibly incomplete rather than silently wrong.
       await admin
         .from("raw_emails")
         .update({ parse_status: "failed", parse_error: msg })

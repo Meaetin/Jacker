@@ -9,12 +9,6 @@ interface EmailParseUsage {
   emails_scanned: number;
 }
 
-interface ReparseUsage {
-  input_tokens: number;
-  output_tokens: number;
-  emails_scanned: number;
-}
-
 interface CvToProfileUsage {
   input_tokens: number;
   output_tokens: number;
@@ -44,7 +38,6 @@ interface ChatMessageUsage {
 
 type UsageEntry =
   | ({ action: "email_parse"; user_id: string } & EmailParseUsage)
-  | ({ action: "reparse"; user_id: string } & ReparseUsage)
   | ({ action: "cv_to_profile"; user_id: string } & CvToProfileUsage)
   | ({ action: "job_analysis"; user_id: string } & JobAnalysisUsage)
   | ({ action: "document_generation"; user_id: string } & DocumentGenerationUsage)
@@ -62,13 +55,6 @@ function toRpcParams(entry: UsageEntry): Record<string, unknown> {
         p_email_parse_output_tokens: entry.output_tokens,
         p_emails_retrieved: entry.emails_retrieved,
         p_emails_scanned: entry.emails_scanned,
-      };
-    case "reparse":
-      return {
-        ...base,
-        p_reparse_input_tokens: entry.input_tokens,
-        p_reparse_output_tokens: entry.output_tokens,
-        p_reparse_emails_scanned: entry.emails_scanned,
       };
     case "cv_to_profile":
       return {
