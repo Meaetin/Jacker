@@ -29,6 +29,19 @@ function resolveCompany(
   return normalizeCompany(raw);
 }
 
+/**
+ * Drops keys whose value is null, so an update only writes fields the incoming
+ * email actually carried.
+ *
+ * Without this, a rejection with no interview details overwrites the interview
+ * date the earlier email established — erasing something that really happened.
+ */
+export function onlyProvided<T extends Record<string, unknown>>(fields: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== null && value !== undefined)
+  ) as Partial<T>;
+}
+
 export type UpsertOutcome = "inserted" | "updated" | "unchanged" | "skipped";
 
 export async function upsertApplication(
@@ -94,10 +107,14 @@ export async function upsertApplication(
       status,
       status_confidence: parseResult.status_confidence,
       source_email_id: rawEmailId,
-      interview_date: parseResult.interview_date,
-      interview_time: parseResult.interview_time,
-      location: parseResult.location,
-      notes: parseResult.notes,
+      // Detail fields only move forward — a later email that says nothing about
+      // the interview must not erase what an earlier one recorded.
+      ...onlyProvided({
+        interview_date: parseResult.interview_date,
+        interview_time: parseResult.interview_time,
+        location: parseResult.location,
+        notes: parseResult.notes,
+      }),
       // Only stamp a date we actually have. Falling back to now() would make an
       // undated email look like it arrived this second, and every later
       // comparison against this row would be measured from the wrong moment.
