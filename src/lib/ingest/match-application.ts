@@ -3,6 +3,7 @@ import {
   findApplicationByCompanyRole,
 } from "@/lib/db/applications";
 import type { Application } from "@/types/application";
+import type { Db } from "@/utils/supabase/db";
 
 const tag = "[match]";
 
@@ -12,7 +13,8 @@ export async function findExistingApplication(
   companyFromBody: string | null,
   companyFromEmail: string | null,
   role: string | null,
-  userId: string
+  userId: string,
+  db?: Db
 ): Promise<Application | null> {
   console.log(
     `${tag} Matching — threadId: ${threadId ?? "none"} | company_from_subject: "${companyFromSubject ?? "null"}" | company_from_body: "${companyFromBody ?? "null"}" | company_from_email: "${companyFromEmail ?? "null"}" | role: "${role ?? "null"}"`
@@ -20,7 +22,7 @@ export async function findExistingApplication(
 
   // 1. Thread ID — most reliable signal
   if (threadId) {
-    const { data: threadMatch } = await findApplicationByThread(threadId, userId);
+    const { data: threadMatch } = await findApplicationByThread(threadId, userId, db);
     if (threadMatch) {
       console.log(
         `${tag} ✓ Matched by thread ID → "${threadMatch.company} - ${threadMatch.role}" (id: ${threadMatch.id})`
@@ -32,7 +34,7 @@ export async function findExistingApplication(
 
   // 2. role + company extracted from subject line
   if (companyFromSubject && role) {
-    const { data: subjectMatch } = await findApplicationByCompanyRole(companyFromSubject, role, userId);
+    const { data: subjectMatch } = await findApplicationByCompanyRole(companyFromSubject, role, userId, db);
     if (subjectMatch) {
       console.log(
         `${tag} ✓ Matched by company_from_subject + role → "${subjectMatch.company} - ${subjectMatch.role}" (id: ${subjectMatch.id})`
@@ -44,7 +46,7 @@ export async function findExistingApplication(
 
   // 3. role + company extracted from email body
   if (companyFromBody && role) {
-    const { data: bodyMatch } = await findApplicationByCompanyRole(companyFromBody, role, userId);
+    const { data: bodyMatch } = await findApplicationByCompanyRole(companyFromBody, role, userId, db);
     if (bodyMatch) {
       console.log(
         `${tag} ✓ Matched by company_from_body + role → "${bodyMatch.company} - ${bodyMatch.role}" (id: ${bodyMatch.id})`
@@ -56,7 +58,7 @@ export async function findExistingApplication(
 
   // 4. role + company inferred from sender address
   if (companyFromEmail && role) {
-    const { data: emailMatch } = await findApplicationByCompanyRole(companyFromEmail, role, userId);
+    const { data: emailMatch } = await findApplicationByCompanyRole(companyFromEmail, role, userId, db);
     if (emailMatch) {
       console.log(
         `${tag} ✓ Matched by company_from_email + role → "${emailMatch.company} - ${emailMatch.role}" (id: ${emailMatch.id})`

@@ -1,4 +1,5 @@
 import { findExistingApplication } from "./match-application";
+import type { Db } from "@/utils/supabase/db";
 import { updateApplication, insertApplication } from "@/lib/db/applications";
 import type { AIParseResult } from "@/types/parse-result";
 import type { ApplicationStatus } from "@/types/application";
@@ -43,7 +44,8 @@ export async function upsertApplication(
   rawEmailId: string,
   threadId: string | null,
   userId: string,
-  receivedAt: string | null
+  receivedAt: string | null,
+  db?: Db
 ): Promise<{ data: unknown; outcome: UpsertOutcome }> {
   const companyFromSubject = parseResult.company_from_subject ?? null;
   const companyFromBody = parseResult.company_from_body ?? null;
@@ -57,7 +59,8 @@ export async function upsertApplication(
     companyFromBody,
     companyFromEmail,
     role,
-    userId
+    userId,
+    db
   );
 
   // No reliable identity — skip to avoid orphaned entries
@@ -94,7 +97,7 @@ export async function upsertApplication(
           ? { company: correctedCompany }
           : {}),
         ...(role && role !== existing.role ? { role } : {}),
-      });
+      }, db);
       if (error) throw new Error(error.message);
       return { data, outcome: "updated" };
     }
@@ -117,7 +120,7 @@ export async function upsertApplication(
     location: parseResult.location,
     notes: parseResult.notes,
     application_updated_at: receivedAt,
-  });
+  }, db);
   if (error) throw new Error(error.message);
   return { data, outcome: "inserted" };
 }

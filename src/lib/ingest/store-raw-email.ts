@@ -1,11 +1,13 @@
 import { storeRawEmail, emailExists } from "@/lib/db/raw-emails";
 import type { GmailMessage } from "@/types/email";
+import type { Db } from "@/utils/supabase/db";
 
 export async function storeIfNew(
   message: GmailMessage,
-  userId: string
+  userId: string,
+  db?: Db
 ): Promise<{ id: string; isNew: boolean }> {
-  const exists = await emailExists(message.id, userId);
+  const exists = await emailExists(message.id, userId, db);
   if (exists) {
     return { id: message.id, isNew: false };
   }
@@ -23,7 +25,7 @@ export async function storeIfNew(
     body_html: message.bodyHtml || null,
     parse_status: "pending",
     parse_error: null,
-  });
+  }, db);
 
   if (error || !data) {
     throw new Error(`Failed to store email ${message.id}: ${error?.message}`);

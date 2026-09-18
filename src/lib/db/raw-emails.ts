@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { resolveDb, type Db } from "@/utils/supabase/db";
 import type { RawEmail } from "@/types/email";
 
 export async function getRawEmailById(id: string, userId: string) {
@@ -13,9 +14,10 @@ export async function getRawEmailById(id: string, userId: string) {
 }
 
 export async function storeRawEmail(
-  email: Omit<RawEmail, "id" | "created_at"> & { user_id: string }
+  email: Omit<RawEmail, "id" | "created_at"> & { user_id: string },
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   return supabase
     .from("raw_emails")
@@ -24,8 +26,12 @@ export async function storeRawEmail(
     .single();
 }
 
-export async function emailExists(gmailMessageId: string, userId: string) {
-  const supabase = await createClient();
+export async function emailExists(
+  gmailMessageId: string,
+  userId: string,
+  db?: Db
+) {
+  const supabase = await resolveDb(db);
 
   const { data } = await supabase
     .from("raw_emails")

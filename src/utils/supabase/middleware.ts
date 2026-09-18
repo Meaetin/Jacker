@@ -40,8 +40,12 @@ export async function updateSession(request: NextRequest) {
   const isProtectedPage = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
+  // Cron routes carry no session cookie — they authenticate with CRON_SECRET
+  // and would otherwise be redirected to /login before ever running.
   const isApiRoute =
-    pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/");
+    pathname.startsWith("/api/") &&
+    !pathname.startsWith("/api/auth/") &&
+    !pathname.startsWith("/api/cron/");
 
   // Not signed in → keep them out of protected pages and API routes
   if (!user && (isProtectedPage || isApiRoute)) {

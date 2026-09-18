@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { resolveDb, type Db } from "@/utils/supabase/db";
 
 // --- Per-action-type field definitions ---
 
@@ -103,8 +103,8 @@ function toRpcParams(entry: UsageEntry): Record<string, unknown> {
   }
 }
 
-export async function trackUsage(entry: UsageEntry) {
-  const supabase = await createClient();
+export async function trackUsage(entry: UsageEntry, db?: Db) {
+  const supabase = await resolveDb(db);
   const params = toRpcParams(entry);
   return supabase.rpc("increment_user_usage", params);
 }

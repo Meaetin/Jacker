@@ -1,7 +1,9 @@
 import { insertParseLog } from "@/lib/db/parse-logs";
 import { PROMPT_VERSION } from "./prompt";
+import type { Db } from "@/utils/supabase/db";
 
 interface LogParseResultParams {
+  db?: Db;
   userId: string;
   rawEmailId: string;
   rawResponse: string;
@@ -10,6 +12,7 @@ interface LogParseResultParams {
 }
 
 export async function logParseResult({
+  db,
   userId,
   rawEmailId,
   rawResponse,
@@ -24,7 +27,7 @@ export async function logParseResult({
       raw_response: rawResponse ? JSON.parse(rawResponse) : null,
       parsed_success: parsedSuccess,
       error_message: errorMessage ?? null,
-    });
+    }, db);
   } catch {
     // Log failures should not break the pipeline
   }

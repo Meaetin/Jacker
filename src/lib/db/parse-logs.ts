@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { resolveDb, type Db } from "@/utils/supabase/db";
 
 interface ParseLogEntry {
   user_id: string;
@@ -9,8 +10,8 @@ interface ParseLogEntry {
   error_message?: string | null;
 }
 
-export async function insertParseLog(entry: ParseLogEntry) {
-  const supabase = await createClient();
+export async function insertParseLog(entry: ParseLogEntry, db?: Db) {
+  const supabase = await resolveDb(db);
 
   return supabase.from("parse_logs").insert(entry);
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { resolveDb, type Db } from "@/utils/supabase/db";
 import type { Application, ApplicationWithSource, ApplicationStatus } from "@/types/application";
 import { normalizeCompany } from "@/utils/normalize-company";
 import { sanitizeEmailHtml } from "@/lib/email/sanitize-email-html";
@@ -117,9 +118,10 @@ export async function getApplicationById(
 export async function updateApplication(
   id: string,
   userId: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   return supabase
     .from("applications")
@@ -132,9 +134,10 @@ export async function updateApplication(
 
 export async function findApplicationByThread(
   threadId: string,
-  userId: string
+  userId: string,
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   return supabase
     .from("applications")
@@ -147,9 +150,10 @@ export async function findApplicationByThread(
 export async function findApplicationByCompanyRole(
   company: string,
   role: string,
-  userId: string
+  userId: string,
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   const normalizedCompany = normalizeCompany(company) ?? company;
 
@@ -164,8 +168,12 @@ export async function findApplicationByCompanyRole(
     .maybeSingle();
 }
 
-export async function findApplicationsByRole(role: string, userId: string) {
-  const supabase = await createClient();
+export async function findApplicationsByRole(
+  role: string,
+  userId: string,
+  db?: Db
+) {
+  const supabase = await resolveDb(db);
 
   return supabase
     .from("applications")
@@ -177,9 +185,10 @@ export async function findApplicationsByRole(role: string, userId: string) {
 
 export async function findApplicationsByCompanySlug(
   slug: string,
-  userId: string
+  userId: string,
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   return supabase
     .from("applications")
@@ -190,9 +199,10 @@ export async function findApplicationsByCompanySlug(
 }
 
 export async function insertApplication(
-  application: Omit<Application, "id" | "created_at" | "updated_at">
+  application: Omit<Application, "id" | "created_at" | "updated_at">,
+  db?: Db
 ) {
-  const supabase = await createClient();
+  const supabase = await resolveDb(db);
 
   return supabase.from("applications").insert(application).select().single();
 }

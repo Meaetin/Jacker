@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import type { OAuth2Client } from "google-auth-library";
 import type { GmailMessage } from "@/types/email";
 import { parseGmailMessage } from "./parse-raw";
-import { createClient } from "@/utils/supabase/server";
+import { resolveDb, type Db } from "@/utils/supabase/db";
 
 const BASE_QUERY = `(application OR applying OR thanks OR "thank you for applying" OR "regret to inform" OR "move forward with other candidates" OR offer OR assessment OR shortlisted OR interview) -category:promotions -category:social`;
 
@@ -12,7 +12,8 @@ export async function fetchRecentEmails(
   auth: OAuth2Client,
   maxResults = 200,
   afterDate?: Date,
-  userId?: string
+  userId?: string,
+  db?: Db
 ): Promise<GmailMessage[]> {
   const gmail = google.gmail({ version: "v1", auth });
 
@@ -63,7 +64,7 @@ export async function fetchRecentEmails(
   // Filter out already-stored message IDs
   let targetIds = allIds;
   if (userId) {
-    const supabase = await createClient();
+    const supabase = await resolveDb(db);
     const { data: stored } = await supabase
       .from("raw_emails")
       .select("gmail_message_id")
