@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { runReparsePipeline } from "@/lib/ingest/reparse-pipeline";
 
+// Re-parsing a backlog is one AI call per stored email. Without this the route
+// runs on the platform default, which is far shorter than the sync route's
+// budget for the same kind of work.
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 export async function POST() {
   const supabase = await createClient();
   const {

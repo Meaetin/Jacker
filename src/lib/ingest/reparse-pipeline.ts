@@ -3,7 +3,18 @@ import { logParseResult } from "@/lib/parser/parse-log";
 import { upsertApplication } from "@/lib/ingest/upsert-application";
 import { trackUsage } from "@/lib/db/user-usage";
 import { createClient } from "@/utils/supabase/server";
+import { mapWithConcurrency } from "@/utils/concurrency";
 import type { RawEmail } from "@/types/email";
+
+// Matches runIngestPipeline — one OpenAI call plus a couple of Supabase writes
+// per email, so the same 8 in flight applies.
+const PARSE_CONCURRENCY = 8;
+
+/** A stored email that had a body and has been re-parsed. */
+interface ParsedRawEmail {
+  email: RawEmail;
+  parseOutput: Awaited<ReturnType<typeof parseJobEmail>>;
+}
 
 export interface ReparseResult {
   total: number;
@@ -55,76 +66,104 @@ export async function runReparsePipeline(
   result.total = rawEmails.length;
   console.log(`[reparse] Found ${rawEmails.length} unparsed emails`);
 
-  for (let i = 0; i < rawEmails.length; i++) {
-    const email = rawEmails[i] as RawEmail;
+  // Phase 1: parse in parallel. Each email only touches its own raw_emails row
+  // and its own parse_log, so nothing here is shared. Mirrors runIngestPipeline.
+  const parsed = await mapWithConcurrency(
+    rawEmails as RawEmail[],
+    PARSE_CONCURRENCY,
+    async (email, i): Promise<ParsedRawEmail | null> => {
+      const bodyText = email.body_text || email.snippet;
 
-    const bodyText = email.body_text || email.snippet;
-
-    if (!bodyText) {
-      result.skipped++;
-      continue;
-    }
-
-    try {
-      console.log(`[reparse] [${i + 1}/${rawEmails.length}] Parsing: "${email.subject}"`);
-
-      const parseOutput = await parseJobEmail({
-        subject: email.subject ?? "",
-        fromEmail: email.from_email ?? "",
-        fromName: email.from_name ?? "",
-        bodyText,
-      });
-
-      totalInputTokens += parseOutput.inputTokens;
-      totalOutputTokens += parseOutput.outputTokens;
-      result.parsed++;
-
-      // Update parse_status on raw_email
-      if (parseOutput.success) {
-        await supabase
-          .from("raw_emails")
-          .update({ parse_status: "parsed", parse_error: null })
-          .eq("id", email.id);
-      } else {
-        await supabase
-          .from("raw_emails")
-          .update({ parse_status: "failed", parse_error: parseOutput.error ?? null })
-          .eq("id", email.id);
+      if (!bodyText) {
+        result.skipped++;
+        return null;
       }
 
-      // Log parse result
-      await logParseResult({
-        userId,
-        rawEmailId: email.id,
-        rawResponse: parseOutput.rawResponse,
-        parsedSuccess: parseOutput.success,
-        errorMessage: parseOutput.error,
-      });
+      try {
+        console.log(`[reparse] [${i + 1}/${rawEmails.length}] Parsing: "${email.subject}"`);
 
-      // Upsert application if job-related and actionable
-      const isLowSignal = parseOutput.result.email_type === "job_alert" || parseOutput.result.email_type === "application_viewed";
-      if (parseOutput.result.is_job_related && !isLowSignal) {
-        const upsertResult = await upsertApplication(
-          parseOutput.result,
-          email.id,
-          email.gmail_thread_id,
-          userId,
-          email.received_at ?? null
-        );
+        const parseOutput = await parseJobEmail({
+          subject: email.subject ?? "",
+          fromEmail: email.from_email ?? "",
+          fromName: email.from_name ?? "",
+          bodyText,
+        });
 
-        const company = parseOutput.result.company_from_email ?? parseOutput.result.company_from_body;
-        if (upsertResult.outcome === "inserted") {
-          console.log(`[reparse] New application: ${company} - ${parseOutput.result.role} (${parseOutput.result.status})`);
-          result.newApplications++;
-        } else if (upsertResult.outcome === "updated") {
-          console.log(`[reparse] Updated application: ${company} - ${parseOutput.result.role} → ${parseOutput.result.status}`);
-          result.updatedApplications++;
+        totalInputTokens += parseOutput.inputTokens;
+        totalOutputTokens += parseOutput.outputTokens;
+        result.parsed++;
+
+        // Update parse_status on raw_email
+        if (parseOutput.success) {
+          await supabase
+            .from("raw_emails")
+            .update({ parse_status: "parsed", parse_error: null })
+            .eq("id", email.id);
+        } else {
+          await supabase
+            .from("raw_emails")
+            .update({ parse_status: "failed", parse_error: parseOutput.error ?? null })
+            .eq("id", email.id);
         }
+
+        // Log parse result
+        await logParseResult({
+          userId,
+          rawEmailId: email.id,
+          rawResponse: parseOutput.rawResponse,
+          parsedSuccess: parseOutput.success,
+          errorMessage: parseOutput.error,
+        });
+
+        return { email, parseOutput };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        console.error(`[reparse] Error parsing email ${email.id}: ${msg}`);
+        result.errors.push(`Error parsing email ${email.id}: ${msg}`);
+        await supabase
+          .from("raw_emails")
+          .update({ parse_status: "failed", parse_error: msg })
+          .eq("id", email.id);
+        return null;
+      }
+    }
+  );
+
+  // Phase 2: upsert applications, oldest email first and strictly sequential —
+  // see the same note in runIngestPipeline. The DB query returns newest-first,
+  // so the sort here is what actually establishes the order.
+  const toUpsert = parsed
+    .filter((entry): entry is ParsedRawEmail => entry !== null)
+    .filter(({ parseOutput }) => {
+      const isLowSignal =
+        parseOutput.result.email_type === "job_alert" ||
+        parseOutput.result.email_type === "application_viewed";
+      return parseOutput.result.is_job_related && !isLowSignal;
+    })
+    .sort((a, b) => (a.email.received_at ?? "").localeCompare(b.email.received_at ?? ""));
+
+  for (const { email, parseOutput } of toUpsert) {
+    try {
+      const upsertResult = await upsertApplication(
+        parseOutput.result,
+        email.id,
+        email.gmail_thread_id,
+        userId,
+        email.received_at ?? null
+      );
+
+      const company = parseOutput.result.company_from_email ?? parseOutput.result.company_from_body;
+      if (upsertResult.outcome === "inserted") {
+        console.log(`[reparse] New application: ${company} - ${parseOutput.result.role} (${parseOutput.result.status})`);
+        result.newApplications++;
+      } else if (upsertResult.outcome === "updated") {
+        console.log(`[reparse] Updated application: ${company} - ${parseOutput.result.role} → ${parseOutput.result.status}`);
+        result.updatedApplications++;
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Unknown error";
-      console.error(`[reparse] Error parsing email ${email.id}: ${msg}`);
-      result.errors.push(`Error parsing email ${email.id}: ${msg}`);
+      console.error(`[reparse] Error upserting from email ${email.id}: ${msg}`);
+      result.errors.push(`Error upserting from email ${email.id}: ${msg}`);
       await supabase
         .from("raw_emails")
         .update({ parse_status: "failed", parse_error: msg })
