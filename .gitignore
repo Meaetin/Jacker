@@ -46,3 +46,7 @@ skills-lock.json
 
 # bash
 bash.exe.stackdump
+
+# graphify — generated graph; only the human-readable report is tracked
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md

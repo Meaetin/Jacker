@@ -2,6 +2,8 @@
 
 A knowledge graph of this codebase lives in `graphify-out/`. Use it before touching unfamiliar areas.
 
+Only `GRAPH_REPORT.md` is committed. Everything else in `graphify-out/` is generated and gitignored, so a fresh clone has the report but no graph — run `/graphify . --update` to rebuild the rest.
+
 - **`graphify-out/graph.html`** — interactive visualization, open in any browser. Nodes are colored by community; click any node to see its connections.
 - **`graphify-out/GRAPH_REPORT.md`** — communities, god nodes, surprising connections, knowledge gaps. This is the generated source of truth; read it rather than a copy pasted elsewhere.
 - **`graphify-out/graph.json`** — raw graph data for programmatic queries.
