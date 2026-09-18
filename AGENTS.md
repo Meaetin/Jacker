@@ -14,6 +14,7 @@ npm, with `package-lock.json`. Copy `.env.example` to `.env` first.
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
+| `npm test` | Vitest, once through |
 
 ## Layout
 
