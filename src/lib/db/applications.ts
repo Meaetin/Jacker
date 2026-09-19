@@ -9,6 +9,9 @@ interface ApplicationFilters {
   search?: string;
   page?: number;
   limit?: number;
+  /** Which screen is asking. The board reads every row it requests, so it has
+   *  no use for a total and shouldn't pay for counting one. */
+  view?: "table" | "kanban";
 }
 
 export async function getApplications(
@@ -16,11 +19,15 @@ export async function getApplications(
   filters: ApplicationFilters = {}
 ) {
   const supabase = await createClient();
-  const { status, company, search, page = 1, limit = 20 } = filters;
+  const { status, company, search, page = 1, limit = 20, view = "table" } = filters;
+
+  // `count: "exact"` makes Postgres walk every matching row a second time. The
+  // table needs it to know whether another page exists; the board never does.
+  const count = view === "kanban" ? undefined : ("exact" as const);
 
   let query = supabase
     .from("applications")
-    .select("*", { count: "exact" })
+    .select("*", { count })
     .eq("user_id", userId)
     // Deterministic total order so .range() windows never overlap or skip
     // (id is the tiebreaker for equal/NULL application_updated_at).

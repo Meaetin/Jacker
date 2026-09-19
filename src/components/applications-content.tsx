@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { ApplicationTable } from "@/components/application-table";
 import { KanbanBoard } from "@/components/kanban-board";
+import { KanbanSkeleton } from "@/components/kanban-skeleton";
 import { FilterBar } from "@/components/filter-bar";
 import { DashboardActions } from "@/components/dashboard-actions";
 import { ViewToggle } from "@/components/view-toggle";
@@ -89,6 +90,19 @@ export function ApplicationsContent({
   );
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // The board draws every row at once, so until its fetch lands there is
+  // nothing honest to show. Without this the switch rendered the table's
+  // 20 loaded rows as a board, which looked like a full board missing its
+  // older cards rather than a board that hadn't loaded.
+  const [boardLoading, setBoardLoading] = useState(false);
+
+  // Last full board, so switching back into kanban paints immediately instead
+  // of refetching a thousand rows. Keyed by search because the board query
+  // honours the search box but ignores the status filter.
+  const boardCacheRef = useRef<{ search: string; rows: Application[] } | null>(
+    initialView === "kanban" ? { search: initialSearch, rows: applications } : null
+  );
+
   // Aggregate stats over ALL rows (not just the loaded page).
   const [stats, setStats] = useState(initialStats);
 
@@ -122,6 +136,7 @@ export function ApplicationsContent({
         if (status) params.set("status", status);
       }
       if (debouncedSearch) params.set("search", debouncedSearch);
+      params.set("view", forView);
       return params.toString();
     },
     [status, debouncedSearch]
@@ -148,8 +163,12 @@ export function ApplicationsContent({
       setLocalApplications(merged);
       setPage(pageNum);
       setHasMore(view === "table" && merged.length < data.total);
+
+      if (view === "kanban" && !append) {
+        boardCacheRef.current = { search: debouncedSearch, rows: merged };
+      }
     },
-    [buildQuery, view]
+    [buildQuery, view, debouncedSearch]
   );
 
   // Debounce the search input before it drives a refetch.
@@ -167,7 +186,10 @@ export function ApplicationsContent({
       return;
     }
     setLoadingMore(true);
-    fetchApplications(1, false).finally(() => setLoadingMore(false));
+    fetchApplications(1, false).finally(() => {
+      setLoadingMore(false);
+      setBoardLoading(false);
+    });
   }, [status, debouncedSearch, view, fetchApplications]);
 
   // Infinite scroll (table view only).
@@ -225,12 +247,19 @@ export function ApplicationsContent({
     [status, refreshStats]
   );
 
+  const dropFromBoardCache = useCallback((id: string) => {
+    const cached = boardCacheRef.current;
+    if (!cached) return;
+    boardCacheRef.current = { ...cached, rows: cached.rows.filter((a) => a.id !== id) };
+  }, []);
+
   const applyDelete = useCallback(
     (id: string) => {
       setLocalApplications((prev) => prev.filter((a) => a.id !== id));
+      dropFromBoardCache(id);
       refreshStats();
     },
-    [refreshStats]
+    [dropFromBoardCache, refreshStats]
   );
 
   // Realtime: stream inserts/updates/deletes from the DB into the loaded list.
@@ -256,9 +285,10 @@ export function ApplicationsContent({
   const removeFromRealtime = useCallback(
     (id: string) => {
       setLocalApplications((prev) => prev.filter((a) => a.id !== id));
+      dropFromBoardCache(id);
       refreshStats();
     },
-    [refreshStats]
+    [dropFromBoardCache, refreshStats]
   );
 
   useRealtimeApplications(userId, {
@@ -282,15 +312,30 @@ export function ApplicationsContent({
   const [deletingApplication, setDeletingApplication] = useState<Application | null>(null);
 
   function handleViewChange(next: "table" | "kanban") {
-    setView(next);
     if (next === "table") {
+      // Keep the board we are leaving, including any edits made on it, so a
+      // switch back is instant.
+      if (view === "kanban" && !boardLoading) {
+        boardCacheRef.current = { search: debouncedSearch, rows: listRef.current };
+      }
       // Trim the (possibly full) kanban set to one page before the table
       // renders it, so the table doesn't momentarily show every row while the
       // page-1 fetch is in flight. Paging state is reset to match.
       setLocalApplications((prev) => prev.slice(0, PAGE_SIZE));
       setPage(1);
       setHasMore(false);
+    } else {
+      // Never hand the board the table's page of rows — it would draw them as
+      // a complete board. Reuse the cached board if the search still matches,
+      // otherwise show the skeleton until the fetch lands. Either way the
+      // effect below refetches, so a reused board is corrected in place.
+      const cached = boardCacheRef.current;
+      const rows = cached && cached.search === debouncedSearch ? cached.rows : null;
+      listRef.current = rows ?? [];
+      setLocalApplications(rows ?? []);
+      setBoardLoading(rows === null);
     }
+    setView(next);
     syncUrl({ view: next });
   }
 
@@ -452,14 +497,18 @@ export function ApplicationsContent({
         <DashboardActions gmailConnected={true} isDemo={isDemo} userId={userId} lastSyncAt={lastSyncAt} pendingEmails={pendingEmails} />
       </div>
       {view === "kanban" ? (
-        <KanbanBoard
-          applications={localApplications}
-          columnOrder={columnOrder}
-          onColumnOrderChange={handleColumnOrderChange}
-          onStatusChange={handleDragStatusChange}
-          onContextMenu={handleContextMenu}
-          onCardClick={setSelectedId}
-        />
+        boardLoading ? (
+          <KanbanSkeleton />
+        ) : (
+          <KanbanBoard
+            applications={localApplications}
+            columnOrder={columnOrder}
+            onColumnOrderChange={handleColumnOrderChange}
+            onStatusChange={handleDragStatusChange}
+            onContextMenu={handleContextMenu}
+            onCardClick={setSelectedId}
+          />
+        )
       ) : (
         <>
           <ApplicationTable

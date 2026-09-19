@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { ApplicationsContent } from "@/components/applications-content";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KanbanSkeleton } from "@/components/kanban-skeleton";
 import { getApplications, getApplicationStats } from "@/lib/db/applications";
 import { getKanbanColumnOrder } from "@/lib/db/user-preferences";
 import { APPLICATION_STATUSES } from "@/types/application";
@@ -28,33 +29,6 @@ interface DashboardPageProps {
 async function getIsDemo(email: string | undefined): Promise<boolean> {
   const { isDemoUser } = await import("@/utils/demo");
   return isDemoUser(email);
-}
-
-function KanbanSkeleton() {
-  return (
-    <div className="kanban-skeleton flex gap-3 overflow-x-hidden">
-      {[...APPLICATION_STATUSES.filter((s) => s !== "unknown"), "unknown" as const].map((status) => (
-        <div
-          key={status}
-          className="kanban-skeleton-column flex-shrink-0 w-64 rounded-lg border border-border bg-surface-raised"
-        >
-          <div className="kanban-skeleton-header flex items-center justify-between px-3 py-2.5 border-b border-border">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-5 w-6 rounded-full" />
-          </div>
-          <div className="kanban-skeleton-cards flex flex-col gap-2 p-2">
-            {Array.from({ length: status === "applied" ? 3 : status === "rejected" ? 2 : 1 }).map((_, i) => (
-              <div key={i} className="kanban-skeleton-card bg-surface border border-border rounded-lg p-3 space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-                <Skeleton className="h-3 w-1/3 mt-2" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function TableSkeleton() {
@@ -85,8 +59,8 @@ async function ApplicationsView({ params }: { params: SearchParams }) {
   // Table view loads the first page (20); kanban needs the whole board.
   const listFilters =
     initialView === "kanban"
-      ? { search, page: 1, limit: KANBAN_LIMIT }
-      : { status, search, page: 1, limit: PAGE_SIZE };
+      ? { search, page: 1, limit: KANBAN_LIMIT, view: "kanban" as const }
+      : { status, search, page: 1, limit: PAGE_SIZE, view: "table" as const };
 
   const [{ data: tokens }, { data: applications, count }, stats, columnOrder] = await Promise.all([
     createAdminClient().from("user_tokens").select("user_id, last_sync_at, pending_emails").eq("user_id", userId).maybeSingle(),

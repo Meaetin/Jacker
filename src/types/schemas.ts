@@ -90,6 +90,8 @@ export const applicationFiltersSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   // Table view paginates at 20; kanban requests the whole board in one page.
   limit: z.coerce.number().min(1).max(1000).default(20),
+  // Decides whether the query pays for an exact total; only the table uses one.
+  view: z.enum(["table", "kanban"]).default("table"),
 });
 
 const optionalString = z.string().trim().optional().default("");
